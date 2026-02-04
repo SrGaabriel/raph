@@ -13,9 +13,9 @@ panic = "abort"
 panic = "abort"
 
 [workspace.dependencies]
-raph_common = { path = "common" }
-raph_api = { path = "api" }
-raph_runtime = { path = "runtime" }
+common = { path = "common" }
+api = { path = "api" }
+runtime = { path = "runtime" }
 thiserror = { version = "2", default-features = false }
 anyhow = { version = "1", default-features = false }
 chumsky = { version = "0.12", default-features = false }

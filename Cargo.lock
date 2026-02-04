@@ -15,6 +15,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
+name = "api"
+version = "0.1.0"
+dependencies = [
+ "common",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -32,15 +39,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+
+[[package]]
 name = "compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "api",
  "chumsky",
+ "common",
  "miette",
- "raph_api",
- "raph_common",
- "raph_runtime",
+ "runtime",
  "thiserror",
 ]
 
@@ -96,22 +107,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "raph_api"
+name = "runtime"
 version = "0.1.0"
 dependencies = [
- "raph_common",
-]
-
-[[package]]
-name = "raph_common"
-version = "0.1.0"
-
-[[package]]
-name = "raph_runtime"
-version = "0.1.0"
-dependencies = [
- "raph_api",
- "raph_common",
+ "api",
+ "common",
 ]
 
 [[package]]

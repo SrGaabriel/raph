@@ -3,9 +3,9 @@
 use core::panic::PanicInfo;
 
 #[global_allocator]
-static ALLOCATOR: raph_common::alloc::Allocator = raph_common::alloc::Allocator::new();
+static ALLOCATOR: common::alloc::Allocator = common::alloc::Allocator::new();
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    raph_api::abort(info)
+    api::abort(info)
 }

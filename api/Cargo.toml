@@ -1,8 +1,8 @@
 [package]
-name = "raph_api"
+name = "api"
 version = "0.1.0"
 publish.workspace = true
 edition.workspace = true
 
 [dependencies]
-raph_common.workspace = true
+common.workspace = true

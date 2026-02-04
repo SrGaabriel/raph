@@ -3,7 +3,7 @@
 
 use alloc::string::String;
 use miette::{Diagnostic, NamedSource, NarratableReportHandler};
-use raph_api::{
+use api::{
     io::{fs::MappedFile, stdin::Args},
     println,
 };
@@ -11,8 +11,8 @@ use raph_api::{
 use crate::syntax::{SourceFile, lexer::Lexer, parser::parse};
 
 extern crate alloc;
-extern crate raph_common;
-extern crate raph_runtime;
+extern crate common;
+extern crate runtime;
 
 pub mod core;
 pub mod syntax;
