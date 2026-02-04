@@ -1,10 +1,28 @@
 #![no_std]
 
+pub mod alloc;
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     unsafe {
         for i in 0..n {
             *dest.add(i) = *src.add(i);
+        }
+        dest
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    unsafe {
+        if (dest as usize) < (src as usize) {
+            for i in 0..n {
+                *dest.add(i) = *src.add(i);
+            }
+        } else if (dest as usize) > (src as usize) {
+            for i in (0..n).rev() {
+                *dest.add(i) = *src.add(i);
+            }
         }
         dest
     }
@@ -30,6 +48,17 @@ pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
             }
         }
         0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn strlen(s: *const u8) -> usize {
+    unsafe {
+        let mut len = 0;
+        while *s.add(len) != 0 {
+            len += 1;
+        }
+        len
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::syntax::{
     SourceFile, SourcePos, SourceSpan,
-    error::{SyntacticError, SyntacticErrorKind},
+    error::{LexError, LexErrorKind},
     token::{Token, TokenKind},
 };
 
@@ -48,7 +48,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, SyntacticError<'a>>;
+    type Item = Result<Token<'a>, LexError<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let source = &self.source_file.source;
@@ -241,8 +241,8 @@ impl<'a> Iterator for Lexer<'a> {
             u => {
                 self.source_pos.advance_by_char(u);
                 let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
-                Some(Err(SyntacticError {
-                    kind: SyntacticErrorKind::UnexpectedChar(u),
+                Some(Err(LexError {
+                    kind: LexErrorKind::UnexpectedChar(u),
                     span: SourceSpan {
                         start,
                         end: self.source_pos,
