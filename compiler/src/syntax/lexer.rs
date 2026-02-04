@@ -1,5 +1,5 @@
 use crate::syntax::{
-    SourceFile, SourcePos, SourceSpan,
+    LexerCursor, SourceFile, Span,
     error::{LexError, LexErrorKind},
     token::{Token, TokenKind},
 };
@@ -22,14 +22,14 @@ fn is_ident_continue(c: char) -> bool {
 
 pub struct Lexer<'a> {
     source_file: &'a SourceFile<'a>,
-    source_pos: SourcePos,
+    cursor: LexerCursor,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(source_file: &'a SourceFile<'a>) -> Self {
         Self {
             source_file,
-            source_pos: SourcePos::start_of_file(source_file.id),
+            cursor: LexerCursor::new(source_file.id),
         }
     }
 
@@ -45,6 +45,10 @@ impl<'a> Lexer<'a> {
         }
         index
     }
+
+    pub fn eoi_span(&self) -> Span {
+        Span::empty(self.cursor.file, self.cursor.byte_offset)
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -53,49 +57,45 @@ impl<'a> Iterator for Lexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let source = &self.source_file.source;
 
-        loop {
-            if self.source_pos.byte_offset >= source.len() {
-                return None;
-            }
-            let b = source[self.source_pos.byte_offset];
-            match b {
-                b' ' | b'\t' | b'\r' => self.source_pos.row(),
-                b'\n' => self.source_pos.newline(),
+        while self.cursor.byte_offset < source.len() {
+            match source[self.cursor.byte_offset] {
+                b' ' | b'\t' | b'\r' | b'\n' => self.cursor.advance(1),
                 _ => break,
             }
         }
 
-        let remaining = &source[self.source_pos.byte_offset..];
+        if self.cursor.byte_offset >= source.len() {
+            return None;
+        }
+
+        let remaining = &source[self.cursor.byte_offset..];
         let current = decode_utf8_char(remaining)?;
-        let start = self.source_pos;
+        let start = self.cursor.byte_offset;
 
         match current {
             '0'..='9' => {
-                while self.source_pos.byte_offset < source.len() {
-                    let c = source[self.source_pos.byte_offset] as char;
+                while self.cursor.byte_offset < source.len() {
+                    let c = source[self.cursor.byte_offset] as char;
                     if c.is_ascii_digit() {
-                        self.source_pos.row();
+                        self.cursor.advance(1);
                     } else {
                         break;
                     }
                 }
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                let lexeme = &source[start..self.cursor.byte_offset];
 
                 Some(Ok(Token {
                     kind: TokenKind::Number,
                     lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    span: self.cursor.span_from(start),
                 }))
             }
             c if is_ident_start(c) => {
-                while self.source_pos.byte_offset < source.len() {
-                    let remaining = &source[self.source_pos.byte_offset..];
+                while self.cursor.byte_offset < source.len() {
+                    let remaining = &source[self.cursor.byte_offset..];
                     if let Some(c) = decode_utf8_char(remaining) {
                         if is_ident_continue(c) {
-                            self.source_pos.advance_by_char(c);
+                            self.cursor.advance_char(c);
                         } else {
                             break;
                         }
@@ -103,7 +103,7 @@ impl<'a> Iterator for Lexer<'a> {
                         break;
                     }
                 }
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                let lexeme = &source[start..self.cursor.byte_offset];
                 let kind = match lexeme {
                     b"struct" => TokenKind::Struct,
                     _ => TokenKind::Identifier,
@@ -112,141 +112,98 @@ impl<'a> Iterator for Lexer<'a> {
                 Some(Ok(Token {
                     kind,
                     lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    span: self.cursor.span_from(start),
                 }))
             }
             '"' => {
-                self.source_pos.row();
-                while self.source_pos.byte_offset < source.len() {
-                    let c = source[self.source_pos.byte_offset] as char;
+                self.cursor.advance(1);
+                while self.cursor.byte_offset < source.len() {
+                    let c = source[self.cursor.byte_offset] as char;
                     if c == '"' {
-                        self.source_pos.row();
+                        self.cursor.advance(1);
                         break;
                     } else {
-                        self.source_pos.row();
+                        self.cursor.advance(1);
                     }
                 }
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                let lexeme = &source[start..self.cursor.byte_offset];
 
                 Some(Ok(Token {
                     kind: TokenKind::String,
                     lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    span: self.cursor.span_from(start),
                 }))
             }
             '=' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
-
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::Equal,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             ',' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
-
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::Comma,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             ':' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::Colon,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             '{' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::LBrace,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             '}' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::RBrace,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             '(' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::LParen,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             ')' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::RParen,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             ';' => {
-                self.source_pos.row();
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance(1);
                 Some(Ok(Token {
                     kind: TokenKind::Semicolon,
-                    lexeme,
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    lexeme: &source[start..self.cursor.byte_offset],
+                    span: self.cursor.span_from(start),
                 }))
             }
             u => {
-                self.source_pos.advance_by_char(u);
-                let lexeme = &source[start.byte_offset..self.source_pos.byte_offset];
+                self.cursor.advance_char(u);
+                let lexeme = &source[start..self.cursor.byte_offset];
                 Some(Err(LexError {
                     kind: LexErrorKind::UnexpectedChar(u),
-                    span: SourceSpan {
-                        start,
-                        end: self.source_pos,
-                    },
+                    span: self.cursor.span_from(start),
                     lexeme,
                 }))
             }

@@ -12,54 +12,67 @@ pub struct SourceFile<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SourcePos {
-    pub file_index: usize,
-    pub line: usize,
-    pub column: usize,
+pub struct Span {
+    pub file: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Span {
+    pub fn new(file: usize, start: usize, end: usize) -> Self {
+        Self { file, start, end }
+    }
+
+    pub fn empty(file: usize, offset: usize) -> Self {
+        Self {
+            file,
+            start: offset,
+            end: offset,
+        }
+    }
+}
+
+impl SourceFile<'_> {
+    pub fn line_col(&self, byte_offset: usize) -> (usize, usize) {
+        let mut line = 1;
+        let mut col = 1;
+        for (i, &b) in self.source.iter().enumerate() {
+            if i >= byte_offset {
+                break;
+            }
+            if b == b'\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+        }
+        (line, col)
+    }
+}
+
+pub struct LexerCursor {
+    pub file: usize,
     pub byte_offset: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SourceSpan {
-    pub start: SourcePos,
-    pub end: SourcePos,
-}
-
-impl SourcePos {
-    pub fn start_of_file(file_index: usize) -> Self {
+impl LexerCursor {
+    pub fn new(file: usize) -> Self {
         Self {
-            file_index,
-            line: 1,
-            column: 1,
+            file,
             byte_offset: 0,
         }
     }
 
-    pub fn newline(&mut self) {
-        self.line += 1;
-        self.byte_offset += 1;
-        self.column = 1;
+    pub fn advance(&mut self, bytes: usize) {
+        self.byte_offset += bytes;
     }
 
-    pub fn row(&mut self) {
-        self.column += 1;
-        self.byte_offset += 1;
-    }
-
-    pub fn advance_by_char(&mut self, c: char) {
-        self.column += 1;
+    pub fn advance_char(&mut self, c: char) {
         self.byte_offset += c.len_utf8();
     }
-}
 
-impl PartialOrd for SourcePos {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.byte_offset.cmp(&other.byte_offset))
-    }
-}
-
-impl Ord for SourcePos {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.byte_offset.cmp(&other.byte_offset)
+    pub fn span_from(&self, start: usize) -> Span {
+        Span::new(self.file, start, self.byte_offset)
     }
 }

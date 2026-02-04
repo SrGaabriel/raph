@@ -4,50 +4,39 @@ use alloc::vec::Vec;
 use chumsky::{input::Input as _, prelude::*};
 
 use crate::syntax::{
-    SourceSpan,
+    Span,
     error::{ParseError, ParseErrorKind},
     token::TokenKind,
 };
 
-impl chumsky::span::Span for SourceSpan {
+impl chumsky::span::Span for Span {
     type Offset = usize;
-    type Context = usize;
+    type Context = usize; // file index
 
     fn new(context: Self::Context, range: core::ops::Range<Self::Offset>) -> Self {
-        use crate::syntax::SourcePos;
-        SourceSpan {
-            start: SourcePos {
-                file_index: context,
-                line: 0,
-                column: 0,
-                byte_offset: range.start,
-            },
-            end: SourcePos {
-                file_index: context,
-                line: 0,
-                column: 0,
-                byte_offset: range.end,
-            },
+        Span {
+            file: context,
+            start: range.start,
+            end: range.end,
         }
     }
 
     fn context(&self) -> Self::Context {
-        self.start.file_index
+        self.file
     }
 
     fn start(&self) -> Self::Offset {
-        self.start.byte_offset
+        self.start
     }
 
     fn end(&self) -> Self::Offset {
-        self.end.byte_offset
+        self.end
     }
 }
 
-type TokenInput<'a> =
-    chumsky::input::MappedInput<'a, TokenKind, SourceSpan, &'a [(TokenKind, SourceSpan)]>;
+type TokenInput<'a> = chumsky::input::MappedInput<'a, TokenKind, Span, &'a [(TokenKind, Span)]>;
 
-type ParserExtra<'a> = extra::Err<Rich<'a, TokenKind, SourceSpan>>;
+type ParserExtra<'a> = extra::Err<Rich<'a, TokenKind, Span>>;
 
 fn just_token<'a>(
     kind: TokenKind,
@@ -55,10 +44,7 @@ fn just_token<'a>(
     any().filter(move |t: &TokenKind| *t == kind)
 }
 
-pub fn parse(
-    tokens: &[(TokenKind, SourceSpan)],
-    eoi_span: SourceSpan,
-) -> (Option<()>, Vec<ParseError>) {
+pub fn parse(tokens: &[(TokenKind, Span)], eoi_span: Span) -> (Option<()>, Vec<ParseError>) {
     let input = tokens.split_token_span(eoi_span);
 
     let parser = program();
@@ -73,7 +59,7 @@ fn program<'a>() -> impl Parser<'a, TokenInput<'a>, (), ParserExtra<'a>> {
     end()
 }
 
-fn rich_to_parse_error(err: Rich<'_, TokenKind, SourceSpan>) -> ParseError {
+fn rich_to_parse_error(err: Rich<'_, TokenKind, Span>) -> ParseError {
     let span = *err.span();
     let found = err.found().copied();
     let expected: Vec<TokenKind> = err

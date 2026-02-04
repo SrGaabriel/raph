@@ -1,13 +1,13 @@
 extern crate alloc;
 
-use crate::syntax::SourceSpan;
+use crate::syntax::Span;
 use crate::syntax::token::TokenKind;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LexError<'a> {
     pub kind: LexErrorKind,
-    pub span: SourceSpan,
+    pub span: Span,
     pub lexeme: &'a [u8],
 }
 
@@ -22,7 +22,7 @@ pub enum LexErrorKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     pub kind: ParseErrorKind,
-    pub span: SourceSpan,
+    pub span: Span,
     pub expected: Vec<TokenKind>,
     pub found: Option<TokenKind>,
 }
