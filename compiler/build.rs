@@ -3,5 +3,6 @@ fn main() {
         println!("cargo:rustc-link-arg=/ENTRY:_start");
         println!("cargo:rustc-link-arg=/SUBSYSTEM:CONSOLE");
         println!("cargo:rustc-link-lib=kernel32");
+        println!("cargo:rustc-link-lib=shell32");
     }
 }

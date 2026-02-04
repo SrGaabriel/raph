@@ -52,7 +52,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, LexError<'a>>;
+    type Item = Result<Token<'a>, LexError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let source = &self.source_file.source;
@@ -227,11 +227,9 @@ impl<'a> Iterator for Lexer<'a> {
                         span: self.cursor.span_from(start),
                     }))
                 } else {
-                    let lexeme = &source[start..self.cursor.byte_offset];
                     Some(Err(LexError {
                         kind: LexErrorKind::UnexpectedChar('-'),
                         span: self.cursor.span_from(start),
-                        lexeme,
                     }))
                 }
             }
@@ -254,11 +252,9 @@ impl<'a> Iterator for Lexer<'a> {
                         span: self.cursor.span_from(start),
                     }))
                 } else {
-                    let lexeme = &source[start..self.cursor.byte_offset];
                     Some(Err(LexError {
                         kind: LexErrorKind::UnexpectedChar('>'),
                         span: self.cursor.span_from(start),
-                        lexeme,
                     }))
                 }
             }
@@ -272,11 +268,9 @@ impl<'a> Iterator for Lexer<'a> {
             }
             u => {
                 self.cursor.advance_char(u);
-                let lexeme = &source[start..self.cursor.byte_offset];
                 Some(Err(LexError {
                     kind: LexErrorKind::UnexpectedChar(u),
                     span: self.cursor.span_from(start),
-                    lexeme,
                 }))
             }
         }

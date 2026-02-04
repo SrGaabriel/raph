@@ -12,3 +12,4 @@ raph_runtime.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 chumsky.workspace = true
+miette.workspace = true
