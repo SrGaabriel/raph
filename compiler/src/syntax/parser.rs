@@ -5,12 +5,12 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use chumsky::{input::Input, prelude::*};
 
-use crate::syntax::{
+use crate::{spine::Literal, syntax::{
     Span,
     error::{ParseError, ParseErrorKind},
     token::{Token, TokenKind},
-    tree::{Binder, Literal, SyntaxExpr as Expr},
-};
+    tree::{Binder, SyntaxExpr as Expr},
+}};
 
 impl chumsky::span::Span for Span {
     type Offset = usize;
@@ -227,7 +227,7 @@ fn expr_atom<'a>(
     let string = just_token(TokenKind::String).map(|t| {
         let s = lexeme_to_string(t.lexeme);
         let inner = if s.len() >= 2 { &s[1..s.len() - 1] } else { &s };
-        Expr::Lit(Literal::String(String::from(inner)))
+        Expr::Lit(Literal::Str(String::from(inner)))
     });
 
     let hole = just_token(TokenKind::Underscore).map(|_| Expr::Hole);

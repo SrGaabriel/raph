@@ -3,6 +3,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
+use crate::spine::Literal;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyntaxExpr {
@@ -34,12 +35,6 @@ pub enum SyntaxExpr {
     List(Box<SyntaxExpr>),
     Pi(Binder, Box<SyntaxExpr>),
     Sigma(Binder, Box<SyntaxExpr>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Literal {
-    Nat(u64),
-    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
