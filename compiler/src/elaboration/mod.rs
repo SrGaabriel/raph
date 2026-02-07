@@ -1,10 +1,16 @@
 pub mod ctx;
 pub mod err;
+pub mod infer;
 pub mod reduce;
 pub mod subst;
 pub mod unify;
 
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::{String, ToString}, vec::Vec};
+use alloc::{
+    boxed::Box,
+    collections::btree_map::BTreeMap,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::{
     elaboration::{
@@ -12,7 +18,10 @@ use crate::{
         err::ElabError,
     },
     module::{
-        ModuleId, name::QualifiedName, prim::{prim_fin, prim_nat, prim_string, prim_type}, unique::{Unique, UniqueGen}
+        ModuleId,
+        name::QualifiedName,
+        prim::{prim_array, prim_fin, prim_nat, prim_string},
+        unique::{Unique, UniqueGen},
     },
     spine::{BinderInfo, Level, Term},
     syntax::tree::{SyntaxBinder, SyntaxExpr},
@@ -28,38 +37,61 @@ impl Environment {
     // todo: remove
     pub fn pre_loaded(module_id: ModuleId) -> Self {
         let mut decls = BTreeMap::new();
-        decls.insert(prim_nat(), Declaration::Constructor {
-            name: prim_nat(),
-            type_: Term::Sort(Level::Zero),
-        });
-        decls.insert(prim_string(), Declaration::Constructor {
-            name: prim_string(),
-            type_: Term::Sort(Level::Zero),
-        });
-        decls.insert(prim_type(), Declaration::Constructor {
-            name: prim_type(),
-            type_: Term::Sort(Level::Succ(Box::new(Level::Zero))),
-        });
-        decls.insert(prim_fin(), Declaration::Constructor {
-            name: prim_fin(),
-            type_: Term::Pi(BinderInfo::Explicit, Box::new(Term::Sort(Level::Zero)), Box::new(Term::Sort(Level::Zero))),
-        });
-        Self {
-            module_id,
-            decls,
-        }
+        decls.insert(
+            prim_nat(),
+            Declaration::Constructor {
+                name: prim_nat(),
+                type_: Term::Sort(Level::Zero),
+            },
+        );
+        decls.insert(
+            prim_string(),
+            Declaration::Constructor {
+                name: prim_string(),
+                type_: Term::Sort(Level::Zero),
+            },
+        );
+        decls.insert(
+            prim_fin(),
+            Declaration::Constructor {
+                name: prim_fin(),
+                type_: Term::Pi(
+                    BinderInfo::Explicit,
+                    Box::new(Term::Const(prim_nat())),
+                    Box::new(Term::Sort(Level::Zero)),
+                ),
+            },
+        );
+        decls.insert(
+            prim_array(),
+            Declaration::Constructor {
+                name: prim_array(),
+                type_: Term::Pi(
+                    BinderInfo::Explicit,
+                    Box::new(Term::Sort(Level::Zero)),
+                    Box::new(Term::Pi(
+                        BinderInfo::Explicit,
+                        Box::new(Term::Const(prim_nat())),
+                        Box::new(Term::Sort(Level::Zero)),
+                    )),
+                ),
+            },
+        );
+        Self { module_id, decls }
     }
-    
+
     pub fn lookup(&self, name: &QualifiedName) -> Option<&Declaration> {
         self.decls.get(name)
     }
-    
+
     pub fn lookup_string(&self, name: &str) -> Option<&Declaration> {
         self.decls.values().find(|decl| match decl {
-            Declaration::Definition { name: decl_name, .. } => 
-                decl_name.unique.display_name == Some(name.to_string()),
-            Declaration::Constructor { name: decl_name, .. } =>
-                decl_name.unique.display_name == Some(name.to_string()),
+            Declaration::Definition {
+                name: decl_name, ..
+            } => decl_name.unique.display_name == Some(name.to_string()),
+            Declaration::Constructor {
+                name: decl_name, ..
+            } => decl_name.unique.display_name == Some(name.to_string()),
         })
     }
 }
@@ -82,6 +114,13 @@ impl Declaration {
         match self {
             Declaration::Definition { name, .. } => name,
             Declaration::Constructor { name, .. } => name,
+        }
+    }
+
+    pub fn type_(&self) -> &Term {
+        match self {
+            Declaration::Definition { type_, .. } => type_,
+            Declaration::Constructor { type_, .. } => type_,
         }
     }
 }
@@ -107,7 +146,7 @@ impl ElabState {
             errors: Vec::new(),
         }
     }
-    
+
     pub fn pre_loaded(module: ModuleId) -> Self {
         let mut state = Self::new(module);
         state.env = Environment::pre_loaded(state.env.module_id.clone());
@@ -136,7 +175,7 @@ impl ElabState {
                 return_type,
                 body,
             } => self.elaborate_def(name, binders, return_type, body),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -170,11 +209,14 @@ impl ElabState {
             pi_type = Term::Pi(info, Box::new(ty), Box::new(pi_type));
         }
 
-        self.env.decls.insert(def_name.clone(), Declaration::Definition {
-            name: def_name,
-            type_: pi_type,
-            value: elaborated_body,
-        });
+        self.env.decls.insert(
+            def_name.clone(),
+            Declaration::Definition {
+                name: def_name,
+                type_: pi_type,
+                value: elaborated_body,
+            },
+        );
 
         self.lctx = saved_lctx;
     }
@@ -200,30 +242,39 @@ impl ElabState {
                 if let Some(decl) = self.lctx.lookup_name(name) {
                     return (Term::FVar(decl.fvar.clone()), decl.type_.clone());
                 }
-                
+
                 if let Some(decl) = self.env.lookup_string(name) {
                     match decl {
                         Declaration::Definition { type_, .. } => {
                             return (Term::Const(decl.name().clone()), type_.clone());
                         }
-                        _ => panic!("unexpected non-definition declaration for variable {}", name),
+                        _ => panic!(
+                            "unexpected non-definition declaration for variable {}",
+                            name
+                        ),
                     }
                 }
 
                 self.errors.push(ElabError::UndefinedVariable(name.clone()));
                 (self.erroneous_term(), self.erroneous_term())
-            },
+            }
+            SyntaxExpr::Constructor(name) if name == "Type" =>
+                (Term::Sort(Level::Zero), Term::Sort(Level::Succ(Box::new(Level::Zero)))),
             SyntaxExpr::Constructor(name) => {
                 if let Some(decl) = self.env.lookup_string(name) {
                     match decl {
                         Declaration::Constructor { type_, .. } => {
                             return (Term::Const(decl.name().clone()), type_.clone());
-                        },
-                        _ => panic!("unexpected non-constructor declaration for constructor {}", name),
+                        }
+                        _ => panic!(
+                            "unexpected non-constructor declaration for constructor {}",
+                            name
+                        ),
                     }
                 }
-                
-                self.errors.push(ElabError::UndefinedConstructor(name.clone()));
+
+                self.errors
+                    .push(ElabError::UndefinedConstructor(name.clone()));
                 (self.erroneous_term(), self.erroneous_term())
             }
             SyntaxExpr::Lit(lit) => {
@@ -232,19 +283,23 @@ impl ElabState {
                     crate::spine::Literal::Str(_) => Term::Const(prim_string()),
                 };
                 (Term::Lit(lit.clone()), ty)
-            },
+            }
             SyntaxExpr::App(fun, arg) => {
                 let (term, fn_type) = self.elaborate_term_inner(fun);
                 let fn_type = reduce::whnf(self, &fn_type);
-                
+
                 match fn_type {
                     Term::Pi(_info, param_ty, body_ty) => {
                         let elaborated_arg = self.elaborate_term(arg, Some(&param_ty));
-                        (Term::App(Box::new(term), Box::new(elaborated_arg)), *body_ty)
-                    },
+                        let return_type = subst::instantiate(&body_ty, &elaborated_arg);
+                        (
+                            Term::App(Box::new(term), Box::new(elaborated_arg)),
+                            return_type
+                        )
+                    }
                     u => {
                         self.errors.push(ElabError::NotAFunction(u));
-                        return (self.erroneous_term(), self.erroneous_term())
+                        return (self.erroneous_term(), self.erroneous_term());
                     }
                 }
             }

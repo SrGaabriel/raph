@@ -20,18 +20,18 @@ pub fn prim_string() -> QualifiedName {
     ))
 }
 
-pub fn prim_type() -> QualifiedName {
-    QualifiedName::new(Unique::new(
-        2,
-        PRIM_MODULE_ID.to_string(),
-        Some("Type".to_string()),
-    ))
-}
-
 pub fn prim_fin() -> QualifiedName {
     QualifiedName::new(Unique::new(
         3,
         PRIM_MODULE_ID.to_string(),
         Some("Fin".to_string()),
+    ))
+}
+
+pub fn prim_array() -> QualifiedName {
+    QualifiedName::new(Unique::new(
+        4,
+        PRIM_MODULE_ID.to_string(),
+        Some("Array".to_string()),
     ))
 }

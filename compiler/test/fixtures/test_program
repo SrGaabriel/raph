@@ -1,1 +1,3 @@
 def dimension {n : Nat} (s : Fin n) : Nat = n
+
+def type {a : Type} (arr : Array a) : Type = a
