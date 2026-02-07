@@ -35,7 +35,24 @@ pub fn is_def_eq(state: &mut ElabState, a: &Term, b: &Term) -> bool {
         return true;
     }
 
-    structural_eq(&a, &b)
+    match (&a, &b) {
+        (Term::App(f1, a1), Term::App(f2, a2)) => {
+            is_def_eq(state, f1, f2) && is_def_eq(state, a1, a2)
+        }
+        (Term::Lam(_, ty1, b1), Term::Lam(_, ty2, b2)) => {
+            is_def_eq(state, ty1, ty2) && is_def_eq(state, b1, b2)
+        }
+        (Term::Pi(_, ty1, b1), Term::Pi(_, ty2, b2)) => {
+            is_def_eq(state, ty1, ty2) && is_def_eq(state, b1, b2)
+        }
+        (Term::Sigma(_, ty1, b1), Term::Sigma(_, ty2, b2)) => {
+            is_def_eq(state, ty1, ty2) && is_def_eq(state, b1, b2)
+        }
+        (Term::Let(ty1, v1, b1), Term::Let(ty2, v2, b2)) => {
+            is_def_eq(state, ty1, ty2) && is_def_eq(state, v1, v2) && is_def_eq(state, b1, b2)
+        }
+        _ => structural_eq(&a, &b),
+    }
 }
 
 fn structural_eq(a: &Term, b: &Term) -> bool {

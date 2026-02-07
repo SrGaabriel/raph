@@ -1,6 +1,14 @@
+use core::fmt::Display;
+
 use alloc::{format, string::String};
 
 use crate::spine::{BinderInfo, Term};
+
+impl Display for Term {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", pretty_term(self))
+    }
+}
 
 pub fn pretty_term(term: &Term) -> String {
     match term {

@@ -14,7 +14,6 @@ extern crate alloc;
 extern crate common;
 extern crate runtime;
 
-pub mod bytecode;
 pub mod module;
 pub mod elaboration;
 pub mod syntax;
@@ -90,11 +89,19 @@ pub extern "C" fn _start() -> i32 {
             Some(tree) => {
                 println!("AST produced for module {}: {:#?}", source_file.name, tree);
                 let module_id = source_file.name.to_string();
-                let elaboration_result = elaboration::elaborate_file(
+                match elaboration::elaborate_file(
                     module_id,
                     &tree
-                );
-                println!("Elaborated module: {:#?}", elaboration_result);
+                ) {
+                    Ok(elab) => println!("Elaboration successful: {:#?}", elab),
+                    Err(errs) => {
+                        for err in &errs {
+                            println!("Error during elaboration: {}", err);
+                        }
+                        println!("Elaboration failed with {} error(s)", errs.len());
+                    }
+                }
+                
             },
             None if errors.is_empty() && lex_errors.is_empty() => println!("No AST produced"),
             None => {}

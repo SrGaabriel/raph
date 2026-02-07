@@ -207,7 +207,11 @@ impl ElabState {
         let elaborated_body = self.elaborate_term(body, Some(&elaborated_return_type));
 
         let mut pi_type = elaborated_return_type;
-        for (_, info, ty) in binder_fvars.into_iter().rev() {
+        let mut value = elaborated_body;
+        for (fvar, info, ty) in binder_fvars.into_iter().rev() {
+            pi_type = subst::abstract_fvar(&pi_type, fvar.clone());
+            value = subst::abstract_fvar(&value, fvar);
+            
             pi_type = Term::Pi(info, Box::new(ty), Box::new(pi_type));
         }
 
@@ -216,7 +220,7 @@ impl ElabState {
             Declaration::Definition {
                 name: def_name,
                 type_: pi_type,
-                value: elaborated_body,
+                value,
             },
         );
 
