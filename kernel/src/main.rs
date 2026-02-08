@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use core::ptr::addr_of;
+
 extern crate alloc;
 extern crate common;
 extern crate runtime;
@@ -87,9 +89,26 @@ unsafe fn init_gdt() {
     };
 }
 
+unsafe fn init_idt() {
+    let descriptor = IdtDescriptor {
+        limit: (core::mem::size_of::<[IdtEntry; 256]>() - 1) as u16,
+        base: addr_of!(IDT) as u64,
+    };
+
+    unsafe {
+        core::arch::asm!(
+            "lidt [{}]",
+            in(reg) &descriptor,
+        )
+    };
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn _start(boot_info: *const BootInfo) -> ! {
-    unsafe { init_gdt() };
+    unsafe {
+        init_gdt();
+        init_idt();
+    };
 
     let info = unsafe { &*boot_info };
     let fb = info.framebuffer.base as *mut u32;
@@ -102,3 +121,49 @@ pub extern "C" fn _start(boot_info: *const BootInfo) -> ! {
 
     loop {}
 }
+
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+struct IdtEntry {
+    offset_low: u16,
+    selector: u16,
+    ist: u8,
+    type_attrs: u8,
+    offset_mid: u16,
+    offset_high: u32,
+    zero: u32,
+}
+
+impl IdtEntry {
+    const fn new(offset: u64, selector: u16, ist: u8, type_attrs: u8) -> Self {
+        IdtEntry {
+            offset_low: offset as u16,
+            selector,
+            ist,
+            type_attrs,
+            offset_mid: (offset >> 16) as u16,
+            offset_high: (offset >> 32) as u32,
+            zero: 0,
+        }
+    }
+
+    const fn missing() -> Self {
+        IdtEntry {
+            offset_low: 0,
+            selector: 0,
+            ist: 0,
+            type_attrs: 0,
+            offset_mid: 0,
+            offset_high: 0,
+            zero: 0,
+        }
+    }
+}
+
+#[repr(C, packed)]
+struct IdtDescriptor {
+    limit: u16,
+    base: u64,
+}
+
+static mut IDT: [IdtEntry; 256] = [IdtEntry::missing(); 256];
