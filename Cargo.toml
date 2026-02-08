@@ -20,7 +20,7 @@ thiserror = { version = "2", default-features = false }
 anyhow = { version = "1", default-features = false }
 chumsky = { version = "0.12", default-features = false }
 miette = {
-    git = "https://github.com/SrGaabriel/miette",
+    git = "https://github.com/asha-os/miette",
     branch = "no-std",
     default-features = false,
     features=["fancy-base"]

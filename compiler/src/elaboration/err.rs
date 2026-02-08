@@ -22,9 +22,9 @@ impl Display for ElabError {
             ElabErrorKind::ExpectedRoot => write!(f, "expected a root-level declaration"),
             ElabErrorKind::UndefinedVariable(name) => write!(f, "undefined variable '{}'", name),
             ElabErrorKind::UndefinedConstructor(name) => write!(f, "undefined constructor '{}'", name),
-            ElabErrorKind::TypeMismatch { expected, found } => write!(f, "type mismatch: expected '{:?}', found '{:?}'", expected, found),
+            ElabErrorKind::TypeMismatch { expected, found } => write!(f, "type mismatch: expected '{}', found '{}'", expected, found),
             ElabErrorKind::UnsupportedSyntax(syntax) => write!(f, "unsupported syntax: '{:?}'", syntax),
-            ElabErrorKind::NotAFunction(term) => write!(f, "not a function: '{:?}'", term),
+            ElabErrorKind::NotAFunction(term) => write!(f, "not a function: '{}'", term),
         }
     }
 }
@@ -47,14 +47,7 @@ impl Diagnostic for ElabError {
     }
     
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        let label = match &self.kind {
-            ElabErrorKind::ExpectedRoot => "expected a root-level declaration".to_string(),
-            ElabErrorKind::UndefinedVariable(name) => format!("undefined variable '{}'", name),
-            ElabErrorKind::UndefinedConstructor(name) => format!("undefined constructor '{}'", name),
-            ElabErrorKind::TypeMismatch { expected, found } => format!("type mismatch: expected '{:?}', found '{:?}'", expected, found),
-            ElabErrorKind::UnsupportedSyntax(syntax) => format!("unsupported syntax: '{:?}'", syntax),
-            ElabErrorKind::NotAFunction(term) => format!("not a function: '{:?}'", term),
-        };
+        let label = self.to_string();
         Some(Box::new(core::iter::once(LabeledSpan::new(
             Some(label),
             self.span.start,

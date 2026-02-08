@@ -118,7 +118,7 @@ dependencies = [
 [[package]]
 name = "miette"
 version = "7.6.0"
-source = "git+https://github.com/SrGaabriel/miette?branch=no-std#dcaebbd5beb049f751501cfb7c7dab0ee8ba932a"
+source = "git+https://github.com/asha-os/miette?branch=no-std#add344980d77f3971cc4d78f9901493548f38995"
 dependencies = [
  "cfg-if",
  "owo-colors",
@@ -211,7 +211,7 @@ dependencies = [
 [[package]]
 name = "textwrap"
 version = "0.16.2"
-source = "git+https://github.com/SrGaabriel/textwrap#85bdf3d7889b48389e4f77fd52f933b05abb0450"
+source = "git+https://github.com/asha-os/textwrap#85bdf3d7889b48389e4f77fd52f933b05abb0450"
 dependencies = [
  "unicode-linebreak",
  "unicode-width",
