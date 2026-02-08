@@ -3,7 +3,13 @@
 
 use crate::{
     idt::{enable_interrupts, init_idt},
-    pic::init_pic, text::{TextWriter, color::{Color, ColorCode}},
+    pic::init_pic,
+    serial::init_serial,
+    tty::{
+        Tty,
+        color::{Color, ColorCode},
+        writer::TextWriter,
+    },
 };
 
 extern crate alloc;
@@ -13,7 +19,8 @@ extern crate runtime;
 pub mod heap;
 pub mod idt;
 pub mod pic;
-pub mod text;
+pub mod serial;
+pub mod tty;
 
 #[repr(C)]
 pub struct MemoryMapInfo {
@@ -119,30 +126,30 @@ pub extern "C" fn _start(boot_info: *const BootInfo) -> ! {
         init_gdt();
         init_idt();
     };
+    init_serial();
     init_pic();
     enable_interrupts();
     pic::register_interrupt_handlers();
+    println!("Serial initialized.");
 
     let info = unsafe { &*boot_info };
     let (free_region, free_size) = find_free_region(&info.memory_map);
     heap::init_heap(free_region, free_size);
 
     let fb_buffer = unsafe {
-        core::slice::from_raw_parts_mut(
-            info.framebuffer.base as *mut u8,
-            info.framebuffer.size,
-        )
+        core::slice::from_raw_parts_mut(info.framebuffer.base as *mut u8, info.framebuffer.size)
     };
-    let mut text_writer = TextWriter::new_framebuffer_writer(
+    let text_writer = TextWriter::new_framebuffer_writer(
         fb_buffer,
         info.framebuffer.clone(),
-        ColorCode::new(Color::White, Color::Black)
+        ColorCode::new(Color::White, Color::Black),
     );
-    text_writer.write_string("Hello, world!");
-    text_writer.new_line();
-    text_writer.write_string("Welcome!");
-
-    loop {}
+    let mut tty = Tty::new(text_writer, None);
+    loop {
+        if let Some(scancode) = pic::pop_scancode() {
+            tty.handle_input(scancode);
+        }
+    }
 }
 
 #[repr(C)]

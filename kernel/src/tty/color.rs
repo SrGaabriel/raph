@@ -26,7 +26,7 @@ pub enum Color {
     LightRed = 12,
     Pink = 13,
     Yellow = 14,
-    White = 15
+    White = 15,
 }
 
 impl Color {
@@ -48,7 +48,7 @@ impl Color {
             13 => Color::Pink,
             14 => Color::Yellow,
             15 => Color::White,
-            _ => Color::White
+            _ => Color::White,
         }
     }
 }

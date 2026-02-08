@@ -1,8 +1,5 @@
-pub mod color;
-mod fonts;
-
-use crate::{FramebufferInfo, text::color::Color};
-use color::ColorCode;
+use crate::{FramebufferInfo, tty::color::Color};
+use super::{color::ColorCode, font::FONT8X8_BASIC_FLATTENED};
 use core::fmt;
 
 pub struct TextWriter {
@@ -26,7 +23,7 @@ impl TextWriter {
             color_code,
             buffer,
             info,
-            font: fonts::FONT8X8_BASIC_FLATTENED.as_slice(),
+            font: FONT8X8_BASIC_FLATTENED.as_slice(),
         };
         writer.clear_screen();
         writer
