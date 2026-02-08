@@ -56,7 +56,7 @@ impl Tty {
                 let (col, row) = self.cursor;
                 self.current_prompt.push(c as u8);
                 self.writer.set_byte_at(c as u8, col, row, self.color_code);
-                self.cursor.0 += 1;
+                self.set_cursor(col + 1, row);
             }
             KeyAction::Backspace => {
                 let (col, row) = self.cursor;
@@ -68,8 +68,10 @@ impl Tty {
                 self.writer.clear_byte_at(col - 1, row);
             }
             KeyAction::ArrowLeft => {
-                println!("Cursor before: {:?}", self.cursor);
-                self.cursor.0 = self.cursor.0.saturating_sub(1);
+                self.set_cursor(self.cursor.0.saturating_sub(1), self.cursor.1);
+            },
+            KeyAction::ArrowRight => {
+                self.set_cursor(self.cursor.0.saturating_add(1), self.cursor.1);
             }
             _ => {}
         }
@@ -77,6 +79,21 @@ impl Tty {
 
     pub fn set_command_handler(&mut self, handler: Option<fn(&str)>) {
         self.command_handler = handler;
+    }
+    
+    fn set_cursor(&mut self, col: usize, row: usize) {
+        if col > self.current_prompt.len() || row > 0 { 
+            return;
+        }
+        let (current_col, current_row) = self.cursor;
+        if let Some(current_char) = self.current_prompt.get(current_col).cloned() {
+            self.writer.set_byte_at(current_char, current_col, current_row, self.color_code);
+        } else {
+            self.writer.clear_byte_at(current_col, current_row);
+        }
+        let next_char = self.current_prompt.get(col).cloned().unwrap_or(b' ') as char;
+        self.cursor = (col, row);
+        self.writer.set_byte_at(next_char as u8, col, row, ColorCode::new(Color::Black, Color::White));
     }
 
     fn interpret_key(&self, key: Key) -> KeyAction {

@@ -81,8 +81,8 @@ impl TextWriter {
         self.buffer[0..clear_size].fill(0);
     }
 
-    fn color_to_rgb(&self, color: ColorCode) -> (u8, u8, u8) {
-        match Color::from_u8(color.0) {
+    fn color_to_rgb(&self, color: Color) -> (u8, u8, u8) {
+        match color {
             Color::Black => (0, 0, 0),
             Color::Blue => (0, 0, 255),
             Color::Green => (0, 255, 0),
@@ -109,12 +109,15 @@ impl TextWriter {
     fn set_byte(&mut self, byte: u8, col: usize, row: usize, color_code: ColorCode) {
         let char_idx = byte as usize * 8;
         let font_char = &self.font[char_idx..char_idx + 8];
-        let color = self.color_to_rgb(color_code);
+        let fg = self.color_to_rgb(color_code.foreground());
+        let bg = self.color_to_rgb(color_code.background());
 
         for (y, &row_data) in font_char.iter().enumerate() {
             for x in 0..8 {
                 if (row_data >> x) & 1 == 1 {
-                    self.write_pixel(col + x, row + y, color);
+                    self.write_pixel(col + x, row + y, fg);
+                } else {
+                    self.write_pixel(col + x, row + y, bg);
                 }
             }
         }
