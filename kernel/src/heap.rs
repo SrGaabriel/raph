@@ -1,7 +1,5 @@
 use talc::Span;
 
-// todo: implement dlmalloc
-
 pub fn init_heap(free_region: *mut u8, free_size: usize) {
     let span = Span::from_base_size(free_region, free_size);
     unsafe {
