@@ -277,6 +277,29 @@ impl ElabState {
         }
     }
 
+    fn elaborate_binders(&mut self, binders: &[SyntaxBinder]) -> Vec<(Unique, BinderInfo, Term)> {
+        let mut binder_fvars = Vec::new();
+        for binder in binders {
+            let (binder_name, binder_type_syntax, info) = match binder {
+                SyntaxBinder::Explicit(_, n, ty) => (n, ty, BinderInfo::Explicit),
+                SyntaxBinder::Implicit(_, n, ty) => (n, ty, BinderInfo::Implicit),
+                SyntaxBinder::Instance(_, n, ty) => (n, ty, BinderInfo::InstanceImplicit),
+            };
+            let elaborated_type = self.elaborate_term(binder_type_syntax, None);
+            let (fvar, _) = self.fresh_fvar(binder_name.clone(), elaborated_type.clone());
+            binder_fvars.push((fvar, info, elaborated_type));
+        }
+        binder_fvars
+    }
+
+    fn abstract_binders(binder_fvars: &[(Unique, BinderInfo, Term)], mut term: Term) -> Term {
+        for (fvar, info, ty) in binder_fvars.iter().rev() {
+            term = subst::abstract_fvar(&term, fvar.clone());
+            term = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(term));
+        }
+        term
+    }
+
     fn elaborate_def(
         &mut self,
         name: &str,
@@ -288,28 +311,14 @@ impl ElabState {
         let def_name = QualifiedName::User(self.gen_.fresh(name.to_string()));
 
         let saved_lctx = self.lctx.clone();
-        let mut binder_fvars: Vec<(Unique, BinderInfo, Term)> = Vec::new();
-
-        for binder in binders {
-            let (binder_name, binder_type_syntax, info) = match binder {
-                SyntaxBinder::Explicit(_, n, ty) => (n, ty, BinderInfo::Explicit),
-                SyntaxBinder::Implicit(_, n, ty) => (n, ty, BinderInfo::Implicit),
-                SyntaxBinder::Instance(_, n, ty) => (n, ty, BinderInfo::InstanceImplicit),
-            };
-            let elaborated_type = self.elaborate_term(binder_type_syntax, None);
-            let (fvar, _) = self.fresh_fvar(binder_name.clone(), elaborated_type.clone());
-            binder_fvars.push((fvar, info, elaborated_type));
-        }
+        let binder_fvars = self.elaborate_binders(binders);
         let elaborated_return_type = self.elaborate_term(return_type, None);
         let elaborated_body = self.elaborate_term(body, Some(&elaborated_return_type));
 
-        let mut pi_type = elaborated_return_type;
+        let pi_type = Self::abstract_binders(&binder_fvars, elaborated_return_type);
         let mut value = elaborated_body;
-        for (fvar, info, ty) in binder_fvars.into_iter().rev() {
-            pi_type = subst::abstract_fvar(&pi_type, fvar.clone());
-            value = subst::abstract_fvar(&value, fvar);
-
-            pi_type = Term::Pi(info, Box::new(ty), Box::new(pi_type));
+        for (fvar, _, _) in binder_fvars.iter().rev() {
+            value = subst::abstract_fvar(&value, fvar.clone());
         }
 
         self.env.decls.insert(
@@ -502,20 +511,8 @@ impl ElabState {
         span: Span,
     ) {
         let record_name = QualifiedName::User(self.gen_.fresh(name.to_string()));
-        // todo: remove code duplication
         let saved_lctx = self.lctx.clone();
-        let mut binder_fvars: Vec<(Unique, BinderInfo, Term)> = Vec::new();
-
-        for binder in binders {
-            let (binder_name, binder_type_syntax, info) = match binder {
-                SyntaxBinder::Explicit(_, n, ty) => (n, ty, BinderInfo::Explicit),
-                SyntaxBinder::Implicit(_, n, ty) => (n, ty, BinderInfo::Implicit),
-                SyntaxBinder::Instance(_, n, ty) => (n, ty, BinderInfo::InstanceImplicit),
-            };
-            let elaborated_type = self.elaborate_term(binder_type_syntax, None);
-            let (fvar, _) = self.fresh_fvar(binder_name.clone(), elaborated_type.clone());
-            binder_fvars.push((fvar, info, elaborated_type));
-        }
+        let binder_fvars = self.elaborate_binders(binders);
         let mut field_types: Vec<(String, Term)> = Vec::new();
         for field in fields {
             match field {
@@ -540,13 +537,8 @@ impl ElabState {
                 Box::new(constructor_type),
             );
         }
-        let mut pi_type = Term::Sort(Level::Zero);
-        for (fvar, info, ty) in binder_fvars.into_iter().rev() {
-            pi_type = subst::abstract_fvar(&pi_type, fvar.clone());
-            pi_type = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(pi_type));
-            constructor_type = subst::abstract_fvar(&constructor_type, fvar);
-            constructor_type = Term::Pi(info, Box::new(ty), Box::new(constructor_type));
-        }
+        let pi_type = Self::abstract_binders(&binder_fvars, Term::Sort(Level::Zero));
+        let constructor_type = Self::abstract_binders(&binder_fvars, constructor_type);
 
         self.env.decls.insert(
             record_name.clone(),
@@ -610,25 +602,9 @@ impl ElabState {
     ) {
         let name = QualifiedName::User(self.gen_.fresh(name.to_string()));
         let saved_lctx = self.lctx.clone();
-        
-        // todo: remove code duplication
-        let mut binder_fvars: Vec<(Unique, BinderInfo, Term)> = Vec::new();
-        for binder in binders {
-            let (binder_name, binder_type_syntax, info) = match binder {
-                SyntaxBinder::Explicit(_, n, ty) => (n, ty, BinderInfo::Explicit),
-                SyntaxBinder::Implicit(_, n, ty) => (n, ty, BinderInfo::Implicit),
-                SyntaxBinder::Instance(_, n, ty) => (n, ty, BinderInfo::InstanceImplicit),
-            };
-            let elaborated_type = self.elaborate_term(binder_type_syntax, None);
-            let (fvar, _) = self.fresh_fvar(binder_name.clone(), elaborated_type.clone());
-            binder_fvars.push((fvar, info, elaborated_type));
-        }
-        
-        let mut inductive_type = Term::Sort(Level::Zero);
-        for (fvar, info, ty) in binder_fvars.iter().rev() {
-            inductive_type = subst::abstract_fvar(&inductive_type, fvar.clone());
-            inductive_type = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(inductive_type));
-        }
+
+        let binder_fvars = self.elaborate_binders(binders);
+        let inductive_type = Self::abstract_binders(&binder_fvars, Term::Sort(Level::Zero));
         self.env.decls.insert(
             name.clone(),
             Declaration::Constructor {
@@ -637,25 +613,28 @@ impl ElabState {
                 span,
             },
         );
-        
+
         self.register_in_namespace(&name.display().unwrap(), name.clone());
         let mut namespace = Namespace::new(); // todo: handle existing one
-        self.elaborate_inductive_constructors(
-            &mut namespace,
-            &name,
-            &binder_fvars,
-            constructors,
-        );
-        if let Some(existing) = self.env.root_namespace.children.get_mut(&name.display().unwrap().to_string()) {
+        self.elaborate_inductive_constructors(&mut namespace, &name, &binder_fvars, constructors);
+        if let Some(existing) = self
+            .env
+            .root_namespace
+            .children
+            .get_mut(&name.display().unwrap().to_string())
+        {
             existing.decls.extend(namespace.decls);
             existing.children.extend(namespace.children);
         } else {
-            self.env.root_namespace.children.insert(name.display().unwrap().to_string(), namespace);
+            self.env
+                .root_namespace
+                .children
+                .insert(name.display().unwrap().to_string(), namespace);
         }
-        
+
         self.lctx = saved_lctx;
     }
-    
+
     fn elaborate_inductive_constructors(
         &mut self,
         inductive_namespace: &mut Namespace,
@@ -673,35 +652,20 @@ impl ElabState {
                 } => {
                     let ctor_name = QualifiedName::User(self.gen_.fresh(name.to_string()));
                     let saved_lctx = self.lctx.clone();
-                    
-                    let mut binder_fvars: Vec<(Unique, BinderInfo, Term)> = Vec::new();
-                    for binder in ctor_binders {
-                        let (binder_name, binder_type_syntax, info) = match binder {
-                            SyntaxBinder::Explicit(_, n, ty) => (n, ty, BinderInfo::Explicit),
-                            SyntaxBinder::Implicit(_, n, ty) => (n, ty, BinderInfo::Implicit),
-                            SyntaxBinder::Instance(_, n, ty) => (n, ty, BinderInfo::InstanceImplicit),
-                        };
-                        let elaborated_type = self.elaborate_term(binder_type_syntax, None);
-                        let (fvar, _) = self.fresh_fvar(binder_name.clone(), elaborated_type.clone());
-                        binder_fvars.push((fvar, info, elaborated_type));
-                    }
-                    
-                    let mut constructor_type = if let Some(type_ann) = type_ann {
+
+                    let ctor_binder_fvars = self.elaborate_binders(ctor_binders);
+
+                    let base_type = if let Some(type_ann) = type_ann {
                         self.elaborate_term(type_ann, None)
                     } else {
                         Term::Const(inductive_name.clone())
                     };
-                    
-                    for (fvar, info, ty) in binder_fvars.iter().rev() {
-                        constructor_type = subst::abstract_fvar(&constructor_type, fvar.clone());
-                        constructor_type = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(constructor_type));
-                    }
-                    
-                    for (fvar, info, ty) in binders.iter().rev() {
-                        constructor_type = subst::abstract_fvar(&constructor_type, fvar.clone());
-                        constructor_type = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(constructor_type));
-                    }
-                    
+
+                    let constructor_type = Self::abstract_binders(
+                        binders,
+                        Self::abstract_binders(&ctor_binder_fvars, base_type),
+                    );
+
                     self.env.decls.insert(
                         ctor_name.clone(),
                         Declaration::Constructor {
@@ -710,7 +674,7 @@ impl ElabState {
                             span: *span,
                         },
                     );
-                    
+
                     inductive_namespace.decls.insert(name.clone(), ctor_name);
                     self.lctx = saved_lctx;
                 }
