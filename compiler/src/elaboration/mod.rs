@@ -46,6 +46,9 @@ impl Namespace {
     }
 
     pub fn lookup_decl(&self, name: &str) -> Option<&QualifiedName> {
+        if name.starts_with("$") {
+            return None;
+        }
         self.decls.get(name)
     }
 
@@ -494,12 +497,21 @@ impl ElabState {
             }
         }
 
+        let mut constructor_type = Term::Const(record_name.clone());
+        for (_, field_type) in field_types.into_iter().rev() {
+            constructor_type = Term::Pi(
+                BinderInfo::Explicit,
+                Box::new(field_type),
+                Box::new(constructor_type),
+            );
+        }
         let mut pi_type = Term::Sort(Level::Zero);
         for (fvar, info, ty) in binder_fvars.into_iter().rev() {
             pi_type = subst::abstract_fvar(&pi_type, fvar.clone());
-            pi_type = Term::Pi(info, Box::new(ty), Box::new(pi_type));
+            pi_type = Term::Pi(info.clone(), Box::new(ty.clone()), Box::new(pi_type));
+            constructor_type = subst::abstract_fvar(&constructor_type, fvar);
+            constructor_type = Term::Pi(info, Box::new(ty), Box::new(constructor_type));
         }
-        println!("Elaborated record '{}' with type: {}", name, &pi_type);
 
         self.env.decls.insert(
             record_name.clone(),
@@ -509,7 +521,24 @@ impl ElabState {
                 span,
             },
         );
-        self.register_in_namespace(name, record_name);
+        self.register_in_namespace(name, record_name.clone());
+
+        let constructor_name = QualifiedName::User(self.gen_.fresh("new".to_string()));
+        self.env.decls.insert(
+            constructor_name.clone(),
+            Declaration::Constructor {
+                name: constructor_name.clone(),
+                type_: constructor_type,
+                span,
+            },
+        );
+        let child_ns = self
+            .env
+            .root_namespace
+            .children
+            .entry(name.into())
+            .or_insert_with(Namespace::new);
+        child_ns.decls.insert("new".into(), constructor_name);
 
         self.lctx = saved_lctx;
     }
