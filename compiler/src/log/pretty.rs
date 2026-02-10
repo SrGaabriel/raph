@@ -54,6 +54,7 @@ pub fn pretty_term(term: &Term) -> String {
         Term::Sort(level) => format!("Type({:?})", level),
         Term::Let(binding, value, body) => format!("(let {} = {} in {})", pretty_term(binding), pretty_term(value), pretty_term(body)),
         Term::Lit(lit) => format!("{:?}", lit),
+        Term::Unit => "Unit".to_string(),
     }
 }
 

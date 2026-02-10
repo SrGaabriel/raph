@@ -76,6 +76,7 @@ fn structural_eq(a: &Term, b: &Term) -> bool {
         (Term::Let(ty1, v1, b1), Term::Let(ty2, v2, b2)) => {
             structural_eq(ty1, ty2) && structural_eq(v1, v2) && structural_eq(b1, b2)
         }
+        (Term::Unit, Term::Unit) => true,
         _ => false,
     }
 }
@@ -104,7 +105,7 @@ fn instantiate_mvars(state: &ElabState, term: &Term) -> Term {
                 term.clone()
             }
         }
-        Term::Const(_) | Term::BVar(_) | Term::FVar(_) | Term::Lit(_) => term.clone(),
+        Term::Unit | Term::Const(_) | Term::BVar(_) | Term::FVar(_) | Term::Lit(_) => term.clone(),
         Term::Sort(l) => Term::Sort(instantiate_mvars_level(state, l)),
         Term::App(f, a) => Term::App(
             Box::new(instantiate_mvars(state, f)),
@@ -177,6 +178,7 @@ fn occurs_in(mvar: Unique, term: &Term) -> bool {
         Term::FVar(_) => false,
         Term::Lit(_) => false,
         Term::Const(_) => false,
+        Term::Unit => false,
         Term::Sort(l) => occurs_in_level(mvar, l),
         Term::App(f, a) => occurs_in(mvar.clone(), f) || occurs_in(mvar, a),
         Term::Lam(_, ty, body) => occurs_in(mvar.clone(), ty) || occurs_in(mvar, body),

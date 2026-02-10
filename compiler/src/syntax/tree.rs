@@ -57,6 +57,7 @@ pub enum SyntaxExpr {
         span: Span,
     },
     Hole(Span),
+    Unit(Span),
     Arrow {
         param_type: Box<SyntaxExpr>,
         return_type: Box<SyntaxExpr>,
@@ -142,6 +143,7 @@ impl Spanned for SyntaxExpr {
             SyntaxExpr::RecordLiteral { span, .. } => *span,
             SyntaxExpr::RecordLiteralField { span, .. } => *span,
             SyntaxExpr::Extern { span, .. } => *span,
+            SyntaxExpr::Unit(span) => *span,
         }
     }
 }

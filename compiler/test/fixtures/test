@@ -1,5 +1,3 @@
-extern puts : Str -> IO Nat
+extern puts : Str -> IO ()
 
-eval puts;
-
-def main : IO Nat = puts "Hello, World!"
+def main : IO () = puts "Hello, World!"

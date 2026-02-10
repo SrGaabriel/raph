@@ -413,10 +413,10 @@ fn expr_atom<'a>(
         )
         .then(just_token(TokenKind::RParen))
         .map(|((lparen, items), rparen)| {
-            if items.len() == 1 {
-                items.into_iter().next().unwrap()
-            } else {
-                Expr::Tuple {
+            match items.len() {
+                0 => Expr::Unit(spanning(&lparen, &rparen)),
+                1 => items.into_iter().next().unwrap(),
+                _ => Expr::Tuple {
                     elements: items,
                     span: spanning(&lparen, &rparen),
                 }

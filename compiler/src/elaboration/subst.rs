@@ -17,7 +17,7 @@ fn instantiate_at(term: &Term, replacement: &Term, depth: usize) -> Term {
                 Term::BVar(*i)
             }
         },
-        Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
+        Term::Unit | Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
         Term::App(f, a) => Term::App(
             Box::new(instantiate_at(f, replacement, depth)),
             Box::new(instantiate_at(a, replacement, depth)),
@@ -62,7 +62,7 @@ fn shift_at(term: &Term, amount: usize, depth: usize) -> Term {
             }
         }
 
-        Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
+        Term::Unit | Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
 
         Term::App(f, a) => Term::App(
             Box::new(shift_at(f, amount, depth)),
@@ -107,7 +107,7 @@ fn abstract_fvar_at(term: &Term, fvar: Unique, depth: usize) -> Term {
             }
         }
 
-        Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
+        Term::Unit | Term::Const(_) | Term::FVar(_) | Term::MVar(_) | Term::Lit(_) | Term::Sort(_) => term.clone(),
 
         Term::App(f, a) => Term::App(
             Box::new(abstract_fvar_at(f, fvar.clone(), depth)),

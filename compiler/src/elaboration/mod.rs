@@ -17,7 +17,6 @@ use crate::{
         ctx::{LocalContext, MetavarContext},
         err::{ElabError, ElabErrorKind},
     },
-    log::pretty::pretty_term,
     module::{
         ModuleId,
         name::QualifiedName,
@@ -468,6 +467,7 @@ impl ElabState {
                     Term::Sort(Level::Zero),
                 )
             }
+            SyntaxExpr::Unit { .. } => (Term::Unit, Term::Sort(Level::Zero)),
             u => {
                 self.errors.push(ElabError::new(
                     err::ElabErrorKind::UnsupportedSyntax(u.clone()),
