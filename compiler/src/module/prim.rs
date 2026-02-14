@@ -1,6 +1,7 @@
 use crate::module::name::{IntrinsicName, QualifiedName};
 
 pub const PRIM_NAT: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Nat);
+pub const PRIM_BOOL: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Nat);
 pub const PRIM_FIN: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Fin);
 pub const PRIM_STRING: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Str);
 pub const PRIM_ARRAY: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Array);
@@ -26,3 +27,4 @@ pub const PRIM_LEQ: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Leq)
 pub const PRIM_HGEQ: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::HGeq);
 pub const PRIM_GEQ: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Geq);
 pub const PRIM_HGT: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::HGt);
+pub const PRIM_GT: QualifiedName = QualifiedName::Intrinsic(IntrinsicName::Gt);

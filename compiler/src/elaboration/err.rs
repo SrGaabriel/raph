@@ -36,6 +36,9 @@ impl Display for ElabError {
                 write!(f, "unsupported syntax: '{:?}'", syntax)
             }
             ElabErrorKind::NotAFunction(term) => write!(f, "not a function: '{}'", term),
+            ElabErrorKind::CannotProject(term, field) => {
+                write!(f, "can't project field '{}' from '{}'", field, term)
+            }
         }
     }
 }
@@ -51,6 +54,7 @@ pub enum ElabErrorKind {
     },
     UnsupportedSyntax(crate::syntax::tree::SyntaxExpr),
     NotAFunction(crate::spine::Term),
+    CannotProject(crate::spine::Term, String),
 }
 
 impl miette::StdError for ElabError {}

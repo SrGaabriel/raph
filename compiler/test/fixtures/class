@@ -1,0 +1,13 @@
+class HAdd_ (a : Type) {
+    add_ : a -> a -> a,
+}
+
+inductive ScottNat {
+    zero : ScottNat,
+    succ : ScottNat -> ScottNat
+}
+
+instance scottNatHAdd : HAdd_ ScottNat {
+}
+
+def sumScottNat {a : Type} (x : a) [hadd_ : HAdd_] : a = hadd_.add_ x x

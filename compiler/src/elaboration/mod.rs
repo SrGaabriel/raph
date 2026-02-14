@@ -7,6 +7,7 @@ pub mod unify;
 use alloc::{
     boxed::Box,
     collections::btree_map::BTreeMap,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -107,6 +108,7 @@ impl Environment {
                 Box::new(Term::Sort(Level::Zero)),
             ),
         );
+        // todo: remove these
         externals.insert(
             PRIM_ADD,
             Term::Pi(
@@ -119,17 +121,38 @@ impl Environment {
                 )),
             ),
         );
+        externals.insert(
+            PRIM_GT,
+            Term::Pi(
+                BinderInfo::Explicit,
+                Box::new(Term::Const(PRIM_NAT)),
+                Box::new(Term::Pi(
+                    BinderInfo::Explicit,
+                    Box::new(Term::Const(PRIM_NAT)),
+                    Box::new(Term::Const(PRIM_BOOL)),
+                )),
+            ),
+        );
         let mut root_namespace = Namespace::new();
         root_namespace.decls.insert("Nat".into(), PRIM_NAT);
         root_namespace.decls.insert("Str".into(), PRIM_STRING);
         root_namespace.decls.insert("Fin".into(), PRIM_FIN);
         root_namespace.decls.insert("Array".into(), PRIM_ARRAY);
         root_namespace.decls.insert("IO".into(), PRIM_IO);
-        root_namespace.decls.insert("HAdd".into(), PRIM_HADD);
-        root_namespace.children.insert("HAdd".into(), Namespace {
-            decls: [("add".into(), PRIM_ADD)].into(),
-            children: BTreeMap::new(),
-        });
+        root_namespace.children.insert(
+            "HAdd".into(),
+            Namespace {
+                decls: [("add".into(), PRIM_ADD)].into(),
+                children: BTreeMap::new(),
+            },
+        );
+        root_namespace.children.insert(
+            "HGt".into(),
+            Namespace {
+                decls: [("gt".into(), PRIM_GT)].into(),
+                children: BTreeMap::new(),
+            },
+        );
         Self {
             module_id,
             externals,
@@ -284,6 +307,12 @@ impl ElabState {
                 constructors,
                 span,
             } => self.elaborate_inductive(name, binders, constructors, *span),
+            SyntaxExpr::Class {
+                name,
+                binders,
+                members,
+                span,
+            } => self.elaborate_class(name, binders, members, *span),
             SyntaxExpr::Eval { expr, .. } => {
                 let term = self.elaborate_term(expr, None);
                 println!("Evaluated term: {:#?}", &term);
@@ -464,29 +493,29 @@ impl ElabState {
                     InfixOp::Neq => (PRIM_BNEQ, PRIM_NEQ),
                     InfixOp::Lt => (PRIM_HLT, PRIM_LT),
                     InfixOp::Leq => (PRIM_HLEQ, PRIM_LEQ),
-                    InfixOp::Gt => (PRIM_HGT, PRIM_GEQ),
+                    InfixOp::Gt => (PRIM_HGT, PRIM_GT),
                     InfixOp::Geq => (PRIM_HGEQ, PRIM_GEQ),
                 };
-                let namespace = alloc::vec![op_namespace.display().unwrap().to_string()];
+                let namespace_str = op_namespace.display().unwrap();
+                let namespace = alloc::vec![namespace_str.to_string()];
                 let member = op_name.display().unwrap().to_string();
-                let term = self.elaborate_term(&SyntaxExpr::Var {
-                    namespace: namespace.clone(),
-                    member: member.clone(),
-                    span: *span,
-                }, None);
+                let var_term = self.elaborate_term(
+                    &SyntaxExpr::Var {
+                        namespace: namespace.clone(),
+                        member: member.clone(),
+                        span: *span,
+                    },
+                    None,
+                );
                 let (arg1, arg2_ty) = self.elaborate_term_inner(lhs);
                 let arg2 = self.elaborate_term(rhs, Some(&arg2_ty));
 
-                if let Some((_, expected_fn_type)) =
-                    self.resolve_name(&namespace, &member)
-                {
+                if let Some((_, expected_fn_type)) = self.resolve_name(&namespace, &member) {
                     let return_type = match expected_fn_type {
                         Term::Pi(_, _, body) => {
                             let after_arg1 = subst::instantiate(body, &arg1);
                             match after_arg1 {
-                                Term::Pi(_, _, body2) => {
-                                    subst::instantiate(&body2, &arg2)
-                                }
+                                Term::Pi(_, _, body2) => subst::instantiate(&body2, &arg2),
                                 _ => {
                                     self.errors.push(ElabError::new(
                                         ElabErrorKind::NotAFunction(after_arg1),
@@ -504,18 +533,58 @@ impl ElabState {
                             self.erroneous_term()
                         }
                     };
+                    let term = Term::App(
+                        Box::new(Term::App(Box::new(var_term), Box::new(arg1))),
+                        Box::new(arg2),
+                    );
                     (term, return_type)
                 } else {
                     self.errors.push(ElabError::new(
-                        ElabErrorKind::UndefinedVariable(
-                            op_namespace.display().unwrap().to_string(),
-                        ),
+                        ElabErrorKind::UndefinedVariable(format!(
+                            "{}::{}",
+                            &namespace_str, &member
+                        )),
                         *span,
                     ));
                     return (self.erroneous_term(), self.erroneous_term());
                 }
             }
             SyntaxExpr::App { fun, arg, .. } => self.elaborate_app(syntax, fun, arg),
+            SyntaxExpr::Proj { value, field, span } => {
+                let (elaborated_value, value_type) = self.elaborate_term_inner(value);
+                let normalized_value_type = reduce::whnf(self, &value_type);
+                match normalized_value_type {
+                    Term::Const(record_name) => {
+                        println!("Yay {:?}", record_name);
+                        let namespace = record_name.display().unwrap().to_string();
+                        if let Some((proj_fn_name, proj_fn_type)) =
+                            self.resolve_name(&[namespace.clone()], field)
+                        {
+                            let proj_fn_term = Term::Const(proj_fn_name.clone());
+                            let applied_proj_fn =
+                                Term::App(Box::new(proj_fn_term), Box::new(elaborated_value));
+                            return (applied_proj_fn, proj_fn_type.clone());
+                        } else {
+                            self.errors.push(ElabError::new(
+                                ElabErrorKind::UndefinedVariable(format!(
+                                    "{}::{}",
+                                    namespace,
+                                    field
+                                )),
+                                *span,
+                            ));
+                            (self.erroneous_term(), self.erroneous_term())
+                        }
+                    }
+                    _ => {
+                        self.errors.push(ElabError::new(
+                            ElabErrorKind::CannotProject(elaborated_value, field.clone()),
+                            *span,
+                        ));
+                        (self.erroneous_term(), self.erroneous_term())
+                    }
+                }
+            }
             SyntaxExpr::Arrow {
                 param_type,
                 return_type,
@@ -769,6 +838,32 @@ impl ElabState {
                 }
             }
         }
+    }
+
+    fn elaborate_class(
+        &mut self,
+        name_str: &str,
+        binders: &[SyntaxBinder],
+        members: &[SyntaxExpr],
+        span: Span,
+    ) {
+        let name = QualifiedName::User(self.gen_.fresh(name_str.to_string()));
+        let saved_lctx = self.lctx.clone();
+
+        let binder_fvars = self.elaborate_binders(binders);
+        let class_type = Self::abstract_binders(&binder_fvars, Term::Sort(Level::Zero));
+        self.register_in_namespace(&name_str, name.clone());
+
+        self.env.decls.insert(
+            name.clone(),
+            Declaration::Constructor {
+                name: name.clone(),
+                type_: class_type,
+                span,
+            },
+        );
+
+        self.lctx = saved_lctx;
     }
 }
 

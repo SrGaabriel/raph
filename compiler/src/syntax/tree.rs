@@ -95,6 +95,19 @@ pub enum SyntaxExpr {
         expr: Box<SyntaxExpr>,
         span: Span,
     },
+    Class {
+        name: String,
+        binders: Vec<SyntaxBinder>,
+        members: Vec<SyntaxExpr>,
+        span: Span,
+    },
+    Instance {
+        name: String,
+        binders: Vec<SyntaxBinder>,
+        type_ann: Box<SyntaxExpr>,
+        members: Vec<SyntaxExpr>,
+        span: Span,
+    },
     Record {
         name: String,
         binders: Vec<SyntaxBinder>,
@@ -170,6 +183,8 @@ impl Spanned for SyntaxExpr {
             SyntaxExpr::Pi { span, .. } => *span,
             SyntaxExpr::Sigma { span, .. } => *span,
             SyntaxExpr::Eval { span, .. } => *span,
+            SyntaxExpr::Class { span, .. } => *span,
+            SyntaxExpr::Instance { span, .. } => *span,
             SyntaxExpr::Record { span, .. } => *span,
             SyntaxExpr::RecordField { span, .. } => *span,
             SyntaxExpr::RecordLiteral { span, .. } => *span,

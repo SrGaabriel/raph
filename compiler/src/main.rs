@@ -92,9 +92,11 @@ pub extern "C" fn _start() -> i32 {
             Some(tree) => {
                 println!("AST produced for module {}: {:#?}", source_file.name, tree);
                 let module_id = source_file.name.to_string();
+                println!("Elaborating module {}...", module_id);
                 match elaboration::elaborate_file(module_id, &tree) {
                     Ok(elab) => println!("Elaboration successful:\n{}", elab),
                     Err(errs) => {
+                        println!("Elaboration failed with {} error(s):", errs.len());
                         for err in &errs {
                             let mut output = String::new();
                             let err_with_source = ErrorWithSource {

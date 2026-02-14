@@ -78,6 +78,8 @@ fn program<'a>() -> impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> {
         record_parser(expr.clone()),
         extern_parser(expr.clone()),
         inductive_parser(expr.clone()),
+        class_parser(expr.clone()),
+        instance_parser(expr.clone()),
     ));
 
     expr.define(expr_impl(expr.clone()));
@@ -151,6 +153,57 @@ fn def_parser<'a>(
             return_type: Box::new(ret_type),
             body: Box::new(body),
         })
+}
+
+fn class_parser<'a>(
+    expr: impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> + Clone,
+) -> impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> {
+    just_token(TokenKind::Class)
+        .then(just_token(TokenKind::UpperIdentifier))
+        .then(
+            binder(expr.clone())
+                .repeated()
+                .collect::<Vec<_>>()
+                .then_ignore(just_token(TokenKind::LBrace))
+                .then(record_fields_parser(expr))
+                .then_ignore(just_token(TokenKind::Comma).or_not())
+                .then(just_token(TokenKind::RBrace)),
+        )
+        .map(
+            |((class_tok, name_tok), ((binders, fields), rbraces))| Expr::Class {
+                span: spanning(&class_tok, &rbraces),
+                name: lexeme_to_string(name_tok.lexeme),
+                binders,
+                members: fields,
+            },
+        )
+}
+
+fn instance_parser<'a>(
+    expr: impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> + Clone,
+) -> impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> {
+    just_token(TokenKind::Instance)
+        .then(just_token(TokenKind::LowerIdentifier))
+        .then(
+            binder(expr.clone())
+                .repeated()
+                .collect::<Vec<_>>()
+                .then_ignore(just_token(TokenKind::Colon))
+                .then(expr.clone())
+                .then_ignore(just_token(TokenKind::LBrace))
+                .then(record_fields_parser(expr))
+                .then_ignore(just_token(TokenKind::Comma).or_not())
+                .then(just_token(TokenKind::RBrace)),
+        )
+        .map(
+            |((instance_tok, name_tok), (((binders, type_ann), fields), rbraces))| Expr::Instance {
+                span: spanning(&instance_tok, &rbraces),
+                name: lexeme_to_string(name_tok.lexeme),
+                binders,
+                type_ann: Box::new(type_ann),
+                members: fields,
+            },
+        )
 }
 
 fn inductive_parser<'a>(
@@ -279,15 +332,7 @@ fn expr_impl<'a>(
 ) -> impl Parser<'a, ParserInput<'a>, Expr, ParserExtra<'a>> + Clone {
     let atom = expr_atom(expr.clone());
 
-    let app = atom
-        .clone()
-        .foldl(atom.clone().repeated(), |lhs, rhs| Expr::App {
-            span: spanning(&lhs, &rhs),
-            fun: Box::new(lhs),
-            arg: Box::new(rhs),
-        });
-
-    let proj = app.clone().foldl(
+    let proj = atom.clone().foldl(
         just_token(TokenKind::Dot)
             .ignore_then(just_token(TokenKind::LowerIdentifier))
             .repeated(),
@@ -298,12 +343,20 @@ fn expr_impl<'a>(
         },
     );
 
-    let mul = proj.clone().foldl(
+    let app = proj
+        .clone()
+        .foldl(proj.clone().repeated(), |lhs, rhs| Expr::App {
+            span: spanning(&lhs, &rhs),
+            fun: Box::new(lhs),
+            arg: Box::new(rhs),
+        });
+
+    let mul = app.clone().foldl(
         choice((
             just_token(TokenKind::Star).to(InfixOp::Mul),
             just_token(TokenKind::Slash).to(InfixOp::Div),
         ))
-        .then(proj.clone())
+        .then(app.clone())
         .repeated(),
         |lhs, (op, rhs)| Expr::InfixOp {
             span: spanning(&lhs, &rhs),
