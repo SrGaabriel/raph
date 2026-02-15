@@ -6,6 +6,11 @@ use crate::{
     spine::{Level, Term},
 };
 
+/// Checks whether two terms are definitionally equal, potentially solving metavariable
+/// constraints in the process.
+///
+/// Returns `true` if the terms can be made equal (possibly by assigning metavariables),
+/// `false` otherwise. Assigned metavariables are recorded in `state.mctx`.
 pub fn is_def_eq(state: &mut ElabState, a: &Term, b: &Term) -> bool {
     if structural_eq(a, b) {
         return true;
@@ -55,6 +60,9 @@ pub fn is_def_eq(state: &mut ElabState, a: &Term, b: &Term) -> bool {
     }
 }
 
+/// Checks pure syntactic equality between two terms without any reduction or
+/// metavariable solving. Two terms are structurally equal when they have the
+/// exact same shape and all leaves (indices, names, literals, levels) match.
 fn structural_eq(a: &Term, b: &Term) -> bool {
     match (a, b) {
         (Term::BVar(i), Term::BVar(j)) => i == j,
@@ -81,6 +89,7 @@ fn structural_eq(a: &Term, b: &Term) -> bool {
     }
 }
 
+/// Structural equality for universe levels.
 fn structural_eq_level(a: &Level, b: &Level) -> bool {
     match (a, b) {
         (Level::Zero, Level::Zero) => true,
@@ -96,6 +105,11 @@ fn structural_eq_level(a: &Level, b: &Level) -> bool {
     }
 }
 
+/// Deeply replaces all assigned metavariables in a term with their values.
+///
+/// Recursively traverses the term, and whenever an `MVar` is encountered that
+/// has been assigned in `state.mctx`, substitutes its value (and recurses into
+/// that value to handle chains of assignments).
 fn instantiate_mvars(state: &ElabState, term: &Term) -> Term {
     match term {
         Term::MVar(u) => {
@@ -134,6 +148,7 @@ fn instantiate_mvars(state: &ElabState, term: &Term) -> Term {
     }
 }
 
+/// Instantiates assigned metavariables within universe levels.
 fn instantiate_mvars_level(state: &ElabState, level: &Level) -> Level {
     match level {
         Level::Zero => Level::Zero,
@@ -153,6 +168,9 @@ fn instantiate_mvars_level(state: &ElabState, level: &Level) -> Level {
     }
 }
 
+/// Attempts to assign metavariable `a` to the value `b`.
+///
+/// Succeeds only when `a` is an unassigned `MVar` and `b` does not contain `a`.
 fn try_assign_mvar(state: &mut ElabState, a: &Term, b: &Term) -> bool {
     let mvar_a = match a {
         Term::MVar(u) => u.clone(),
@@ -171,6 +189,8 @@ fn try_assign_mvar(state: &mut ElabState, a: &Term, b: &Term) -> bool {
     return true;
 }
 
+/// Checks whether `mvar` occurs anywhere inside `term`. Used as the occurs check
+/// during metavariable assignment to prevent infinite types.
 fn occurs_in(mvar: Unique, term: &Term) -> bool {
     match term {
         Term::MVar(u) => *u == mvar,
@@ -190,6 +210,7 @@ fn occurs_in(mvar: Unique, term: &Term) -> bool {
     }
 }
 
+/// Occurs check for universe levels.
 fn occurs_in_level(mvar: Unique, level: &Level) -> bool {
     match level {
         Level::Zero => false,

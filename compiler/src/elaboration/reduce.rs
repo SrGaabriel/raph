@@ -1,9 +1,16 @@
 use alloc::boxed::Box;
 
 use crate::{
-    elaboration::{ElabState, subst}, module::name::QualifiedName, spine::Term
+    elaboration::{ElabState, subst},
+    module::name::QualifiedName,
+    spine::Term,
 };
 
+/// Reduces a term to weak head normal form.
+///
+/// Only the outermost redexes are contracted: beta redexes (`App(Lam, arg)`),
+/// let-bindings, and assigned metavariables. All other term forms are returned
+/// as-is, since their head is already in normal form.
 pub fn whnf(state: &ElabState, term: &Term) -> Term {
     match term {
         Term::App(f, arg) => {
@@ -25,6 +32,11 @@ pub fn whnf(state: &ElabState, term: &Term) -> Term {
     }
 }
 
+/// Extracts the head constant from a (possibly applied) term.
+///
+/// Recursively peels off applications: `f a b c` yields `f`. Returns `Some`
+/// only if the head is a `Term::Const`. Used to identify which record or
+/// inductive type a value belongs to during projection elaboration.
 pub fn head_const(term: &Term) -> Option<&QualifiedName> {
     match term {
         Term::Const(name) => Some(name),

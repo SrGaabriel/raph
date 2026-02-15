@@ -2,10 +2,17 @@ use alloc::boxed::Box;
 
 use crate::{module::unique::Unique, spine::Term};
 
+/// Substitutes `replacement` for `BVar(0)` in `term` (beta reduction).
+///
+/// After substitution, all remaining bound variable indices above 0 are decremented
+/// by one (since one binder has been consumed), and free variables inside `replacement`
+/// are shifted up to account for the binding depth at the substitution site.
 pub fn instantiate(term: &Term, replacement: &Term) -> Term {
     instantiate_at(term, replacement, 0)
 }
 
+/// Recursive worker for [`instantiate`]. `depth` tracks how many binders we've
+/// traversed into. `BVar(depth)` is the target for substitution at each level.
 fn instantiate_at(term: &Term, replacement: &Term, depth: usize) -> Term {
     match term {
         Term::BVar(i) => {
@@ -50,6 +57,12 @@ fn instantiate_at(term: &Term, replacement: &Term, depth: usize) -> Term {
     }
 }
 
+/// Shifts all free De Bruijn indices in `term` up by `amount`.
+///
+/// A "free" index is one that refers beyond the current binding depth. Indices
+/// bound by enclosing binders within `term` itself are left unchanged. This is
+/// used by [`instantiate`] to adjust the replacement term when substituting
+/// under binders.
 fn shift(term: &Term, amount: usize) -> Term {
     if amount == 0 {
         return term.clone();
@@ -57,6 +70,7 @@ fn shift(term: &Term, amount: usize) -> Term {
     shift_at(term, amount, 0)
 }
 
+/// Recursive worker for [`shift`]. Only indices `>= depth` are shifted.
 fn shift_at(term: &Term, amount: usize, depth: usize) -> Term {
     match term {
         Term::BVar(i) => {
@@ -101,10 +115,18 @@ fn shift_at(term: &Term, amount: usize, depth: usize) -> Term {
     }
 }
 
+/// Abstracts a free variable out of a term, converting `FVar(fvar)` into `BVar(0)`.
+///
+/// This is the inverse of [`instantiate`]: it closes over a free variable to create
+/// a term suitable for use as the body of a `Lam`, `Pi`, or `Sigma`. Existing bound
+/// variable indices at or above the current depth are shifted up by one to make room
+/// for the new binder.
 pub fn abstract_fvar(term: &Term, fvar: Unique) -> Term {
     abstract_fvar_at(term, fvar, 0)
 }
 
+/// Recursive worker for [`abstract_fvar`]. `depth` is the De Bruijn index that
+/// `fvar` will be mapped to at the current binding level.
 fn abstract_fvar_at(term: &Term, fvar: Unique, depth: usize) -> Term {
     match term {
         Term::FVar(u) if *u == fvar => Term::BVar(depth),

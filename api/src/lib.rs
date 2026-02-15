@@ -10,7 +10,7 @@ pub fn exit(code: i32) -> ! {
 
     #[cfg(target_os = "asha")]
     loop {}
-}    
+}
 
 pub fn abort(_info: &PanicInfo) -> ! {
     exit(1);

@@ -8,7 +8,9 @@ struct Stdout;
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         #[cfg(not(target_os = "asha"))]
-        std::io::stdout().write_all(s.as_bytes()).map_err(|_| fmt::Error)?;
+        std::io::stdout()
+            .write_all(s.as_bytes())
+            .map_err(|_| fmt::Error)?;
 
         #[cfg(target_os = "asha")]
         {

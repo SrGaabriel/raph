@@ -1,3 +1,28 @@
+//! # Elaboration
+//!
+//! The elaboration module is the core of the type checker. It transforms parsed syntax trees
+//! ([`SyntaxExpr`]) into fully typed core terms ([`Term`]) while performing type inference,
+//! unification, and implicit argument insertion.
+//!
+//! ## Architecture
+//!
+//! Elaboration is driven by [`ElabState`], which carries:
+//! - A global [`Environment`] of declarations and externals
+//! - A [`LocalContext`](ctx::LocalContext) of in-scope binders and let-bindings
+//! - A [`MetavarContext`](ctx::MetavarContext) for unification variables (holes)
+//! - A hierarchical [`Namespace`] tree for name resolution
+//!
+//! The main entry point is [`elaborate_file`], which processes a root syntax tree and produces
+//! an [`Environment`] containing all elaborated declarations.
+//!
+//! ## Submodules
+//!
+//! - [`ctx`]: Local and metavariable context management
+//! - [`err`]: Elaboration error types and diagnostics
+//! - [`unify`]: Definitional equality checking and metavariable assignment
+//! - [`reduce`]: Weak head normal form (WHNF) reduction
+//! - [`subst`]: De Bruijn index substitution, shifting, and abstraction
+
 pub mod ctx;
 pub mod err;
 pub mod reduce;
@@ -32,9 +57,16 @@ use crate::{
     },
 };
 
+/// A hierarchical namespace for name resolution.
+///
+/// Each namespace maps short display names to their [`QualifiedName`],
+/// and may contain child namespaces. This forms a tree
+/// that mirrors the module/record/class/inductive structure of the source program.
 #[derive(Debug, Clone)]
 pub struct Namespace {
+    /// Top-level declarations visible in this namespace, keyed by display name.
     pub decls: BTreeMap<String, QualifiedName>,
+    /// Child namespaces (e.g. record fields, class methods, inductive constructors).
     pub children: BTreeMap<String, Namespace>,
 }
 
@@ -46,14 +78,18 @@ impl Namespace {
         }
     }
 
+    /// Looks up a declaration in this namespace by its display name.
     pub fn lookup_decl(&self, name: &str) -> Option<&QualifiedName> {
         self.decls.get(name)
     }
 
+    /// Returns a direct child namespace by name.
     pub fn child(&self, name: &str) -> Option<&Namespace> {
         self.children.get(name)
     }
 
+    /// Traverses a path of namespace segments, returning the namespace at the end.
+    /// Returns `None` if any segment along the path does not exist.
     pub fn walk(&self, path: &[String]) -> Option<&Namespace> {
         let mut current = self;
         for segment in path {
@@ -62,22 +98,34 @@ impl Namespace {
         Some(current)
     }
 
+    /// Resolves a qualified reference by walking the namespace `path` and then looking up `member`.
     pub fn resolve(&self, path: &[String], member: &str) -> Option<&QualifiedName> {
         self.walk(path)?.lookup_decl(member)
     }
 }
 
+/// The global elaboration environment.
+///
+/// Holds all declarations produced during elaboration, externally-provided primitive
+/// types and operations, and the root namespace for name resolution.
 #[derive(Debug, Clone)]
 pub struct Environment {
+    /// The module this environment belongs to.
     pub module_id: ModuleId,
+    /// Externally-provided declarations. Maps name to its type.
     pub externals: BTreeMap<QualifiedName, Term>,
+    /// All declarations elaborated in this module (definitions, constructors, etc.).
     pub decls: BTreeMap<QualifiedName, Declaration>,
+    /// The root of the namespace tree for name resolution.
     pub root_namespace: Namespace,
 }
 
 impl Environment {
-    // todo: review
+    /// Creates an environment pre-loaded with built-in primitive types and operations.
+    ///
+    /// Also populates the root namespace so these names are resolvable.
     pub fn pre_loaded(module_id: ModuleId) -> Self {
+        // todo: review
         let mut externals = BTreeMap::new();
         externals.insert(PRIM_NAT, Term::Sort(Level::Zero));
         externals.insert(PRIM_STRING, Term::Sort(Level::Zero));
@@ -162,10 +210,14 @@ impl Environment {
         }
     }
 
+    /// Looks up a declaration by its [`QualifiedName`]. Only searches module-local declarations,
+    /// not externals.
     pub fn lookup(&self, name: &QualifiedName) -> Option<&Declaration> {
         self.decls.get(name)
     }
 
+    /// Looks up the type of a name, searching both module-local declarations and externals.
+    /// Returns the canonical [`QualifiedName`] and its type.
     pub fn lookup_type(&self, qname: &QualifiedName) -> Option<(&QualifiedName, &Term)> {
         self.decls
             .get(qname)
@@ -174,14 +226,17 @@ impl Environment {
     }
 }
 
+/// A top-level declaration in the elaborated environment.
 #[derive(Debug, Clone)]
 pub enum Declaration {
+    /// A function or value definition with a known body.
     Definition {
         name: QualifiedName,
         type_: Term,
         value: Term,
         span: Span,
     },
+    /// A declaration that has a type but no reducible body, they are opaque constants.
     Constructor {
         name: QualifiedName,
         type_: Term,
@@ -190,6 +245,7 @@ pub enum Declaration {
 }
 
 impl Declaration {
+    /// Returns the declaration's [`QualifiedName`].
     pub fn name(&self) -> &QualifiedName {
         match self {
             Declaration::Definition { name, .. } => name,
@@ -197,6 +253,7 @@ impl Declaration {
         }
     }
 
+    /// Returns the declaration's type.
     pub fn type_(&self) -> &Term {
         match self {
             Declaration::Definition { type_, .. } => type_,
@@ -205,17 +262,30 @@ impl Declaration {
     }
 }
 
+/// The mutable state threaded through elaboration.
+///
+/// Combines the global environment, local context, metavariable context, unique name
+/// generator, namespace tracking, and accumulated errors into a single state object
+/// that is passed (as `&mut self`) to every elaboration method.
 pub struct ElabState {
+    /// The global environment containing all elaborated declarations and externals.
     pub env: Environment,
+    /// Generator for fresh [`Unique`] identifiers (scoped to the current module).
     pub gen_: UniqueGen,
+    /// Metavariable context: tracks unification variables and their assignments.
     pub mctx: MetavarContext,
+    /// Local context: stack of in-scope binders and let-bindings.
     pub lctx: LocalContext,
+    /// The namespace path currently being elaborated into (e.g. `["MyRecord"]`).
     pub current_namespace: Vec<String>,
+    /// Namespaces that have been opened, making their declarations visible unqualified.
     pub open_namespaces: Vec<Vec<String>>,
+    /// Errors accumulated during elaboration (reported at the end).
     pub errors: Vec<ElabError>,
 }
 
 impl ElabState {
+    /// Creates a blank elaboration state with no pre-loaded primitives.
     pub fn new(module: ModuleId) -> Self {
         Self {
             env: Environment {
@@ -233,26 +303,37 @@ impl ElabState {
         }
     }
 
+    /// Creates an elaboration state pre-loaded with built-in primitive types and operators.
     pub fn pre_loaded(module: ModuleId) -> Self {
         let mut state = Self::new(module);
         state.env = Environment::pre_loaded(state.env.module_id.clone());
         state
     }
 
+    /// Creates a fresh metavariable (unification hole) with the given type, using
+    /// the current local context. Returns it wrapped as `Term::MVar`.
     pub fn fresh_mvar(&mut self, type_: Term) -> Term {
         let u = self.mctx.fresh_mvar(type_, &self.lctx, &mut self.gen_);
         Term::MVar(u)
     }
 
+    /// Creates a fresh free variable with the given display name and type, pushes it
+    /// onto the local context, and returns both the [`Unique`] and `Term::FVar`.
     pub fn fresh_fvar(&mut self, name: String, type_: Term) -> (Unique, Term) {
         let u = self.lctx.push_binder(name, type_, &mut self.gen_);
         (u.clone(), Term::FVar(u))
     }
 
+    /// Produces a throwaway metavariable term used as a placeholder after an error.
     fn erroneous_term(&mut self) -> Term {
         Term::MVar(self.gen_.fresh_unnamed())
     }
 
+    /// Resolves a name to its [`QualifiedName`] and type using multi-level lookup:
+    /// 1. If an explicit namespace path is given, look it up directly.
+    /// 2. Try the current namespace (e.g. inside a record or class body).
+    /// 3. Try each opened namespace in order.
+    /// 4. Fall back to the root namespace.
     fn resolve_name(&self, namespace: &[String], member: &str) -> Option<(&QualifiedName, &Term)> {
         let ns = &self.env.root_namespace;
 
@@ -282,6 +363,7 @@ impl ElabState {
             .and_then(|qn| self.env.lookup_type(qn))
     }
 
+    /// Dispatches a top-level syntax command to the appropriate elaboration handler.
     pub fn elaborate_command(&mut self, cmd: &SyntaxExpr) {
         match cmd {
             SyntaxExpr::Def {
@@ -322,6 +404,11 @@ impl ElabState {
         }
     }
 
+    /// Elaborates a sequence of binders (explicit, implicit, or instance-implicit),
+    /// pushing each into the local context as a free variable.
+    ///
+    /// Returns a list of `(fvar, binder_info, elaborated_type)` triples, which can later
+    /// be used by [`Self::abstract_binders`] to build Pi types.
     fn elaborate_binders(&mut self, binders: &[SyntaxBinder]) -> Vec<(Unique, BinderInfo, Term)> {
         let mut binder_fvars = Vec::new();
         for binder in binders {
@@ -344,6 +431,11 @@ impl ElabState {
         binder_fvars
     }
 
+    /// Converts free variables introduced by [`Self::elaborate_binders`] back into bound
+    /// variables by wrapping `term` in nested Pi types (right to left).
+    ///
+    /// For binders `(a, b, c)` and a term `T`, produces `Pi a. Pi b. Pi c. T`
+    /// where each free variable is abstracted into the corresponding De Bruijn index.
     fn abstract_binders(binder_fvars: &[(Unique, BinderInfo, Term)], mut term: Term) -> Term {
         for (fvar, info, ty) in binder_fvars.iter().rev() {
             term = subst::abstract_fvar(&term, fvar.clone());
@@ -352,6 +444,13 @@ impl ElabState {
         term
     }
 
+    /// Elaborates a `def` declaration.
+    ///
+    /// 1. Generates a fresh [`QualifiedName`] for the definition.
+    /// 2. Saves the local context, elaborates binders, return type, and body.
+    /// 3. Abstracts the binders into a Pi type and lambda body.
+    /// 4. Registers the definition in the environment and namespace.
+    /// 5. Restores the local context.
     fn elaborate_def(
         &mut self,
         name: &str,
@@ -387,6 +486,9 @@ impl ElabState {
         self.lctx = saved_lctx;
     }
 
+    /// Elaborates a syntax expression into a core [`Term`], optionally checking it against
+    /// an expected type. If the inferred type does not unify with the expected type,
+    /// a [`ElabErrorKind::TypeMismatch`] is recorded.
     fn elaborate_term(&mut self, syntax: &SyntaxExpr, expected_type: Option<&Term>) -> Term {
         let (term, inferred_type) = self.elaborate_term_inner(syntax);
 
@@ -405,6 +507,9 @@ impl ElabState {
         term
     }
 
+    /// Core term elaboration. Returns `(elaborated_term, inferred_type)`.
+    ///
+    /// Handles all expression forms and reports errors for unsupported syntax.
     fn elaborate_term_inner(&mut self, syntax: &SyntaxExpr) -> (Term, Term) {
         match syntax {
             SyntaxExpr::Var {
@@ -628,10 +733,16 @@ impl ElabState {
         }
     }
 
+    /// Inserts fresh metavariables for all leading implicit and instance-implicit
+    /// arguments, stopping at the first explicit parameter. Returns the updated term
+    /// (with implicit args applied) and the remaining function type.
     fn insert_implicit_args(&mut self, term: Term, fn_type: Term) -> (Term, Term) {
         self.insert_implicit_args_until(term, fn_type, BinderInfo::Explicit)
     }
 
+    /// Like [`Self::insert_implicit_args`], but stops at a specified [`BinderInfo`] kind
+    /// rather than always stopping at `Explicit`. Used by projection elaboration to
+    /// stop before instance-implicit parameters.
     fn insert_implicit_args_until(
         &mut self,
         mut term: Term,
@@ -652,6 +763,10 @@ impl ElabState {
         (term, fn_type)
     }
 
+    /// Elaborates a function application `fun arg`.
+    ///
+    /// First elaborates `fun`, inserts any implicit arguments, then elaborates
+    /// `arg` against the expected parameter type and instantiates the return type.
     fn elaborate_app(
         &mut self,
         syntax: &SyntaxExpr,
@@ -680,10 +795,17 @@ impl ElabState {
         }
     }
 
+    /// Checks whether two terms are definitionally equal, potentially assigning
+    /// metavariables. Delegates to [`unify::is_def_eq`].
     fn unify(&mut self, a: &Term, b: &Term) -> bool {
         unify::is_def_eq(self, a, b)
     }
 
+    /// Elaborates a `record` declaration.
+    ///
+    /// Creates the record type constant (typed as `Type`), a `new` constructor whose
+    /// parameters are the record fields, and a projection function for each field
+    /// (stored in a child namespace `RecordName.fieldName`).
     fn elaborate_record(
         &mut self,
         name: &str,
@@ -761,6 +883,7 @@ impl ElabState {
         self.lctx = saved_lctx;
     }
 
+    /// Registers a declaration in the appropriate namespace (root or current).
     fn register_in_namespace(&mut self, display_name: &str, qname: QualifiedName) {
         let ns = if self.current_namespace.is_empty() {
             &mut self.env.root_namespace
@@ -777,6 +900,8 @@ impl ElabState {
         ns.decls.insert(display_name.into(), qname);
     }
 
+    /// Elaborates an `extern` declaration: type-checks the annotation and registers
+    /// it as an external (opaque) binding in the environment.
     fn elaborate_extern(&mut self, name: &str, type_ann: &SyntaxExpr, _span: Span) {
         let elaborated_type = self.elaborate_term(type_ann, None);
         let qname = QualifiedName::User(self.gen_.fresh(name.to_string()));
@@ -784,6 +909,11 @@ impl ElabState {
         self.register_in_namespace(name, qname);
     }
 
+    /// Elaborates an `inductive` type declaration.
+    ///
+    /// Creates the inductive type constant (typed as `Type` after abstracting binders),
+    /// then elaborates each constructor via [`Self::elaborate_inductive_constructors`],
+    /// placing them in a child namespace `InductiveName::CtorName`.
     fn elaborate_inductive(
         &mut self,
         name: &str,
@@ -806,7 +936,7 @@ impl ElabState {
         );
 
         self.register_in_namespace(&name.display().unwrap(), name.clone());
-        let mut namespace = Namespace::new(); // todo: handle existing one
+        let mut namespace = Namespace::new();
         self.elaborate_inductive_constructors(&mut namespace, &name, &binder_fvars, constructors);
         if let Some(existing) = self
             .env
@@ -826,6 +956,11 @@ impl ElabState {
         self.lctx = saved_lctx;
     }
 
+    /// Elaborates each constructor of an inductive type.
+    ///
+    /// Each constructor gets its own binders, an optional explicit return type (defaulting
+    /// to the inductive type itself), and has both the inductive's binders and its own
+    /// binders abstracted into the final Pi type.
     fn elaborate_inductive_constructors(
         &mut self,
         inductive_namespace: &mut Namespace,
@@ -879,6 +1014,12 @@ impl ElabState {
         }
     }
 
+    /// Elaborates a typeclass declaration.
+    ///
+    /// Creates the class type constant (typed as `Type`), then for each member field
+    /// wraps its type in an instance-implicit parameter `[self : ClassName args] -> FieldType`,
+    /// enabling typeclass-style dispatch. Members are placed in a child namespace
+    /// `ClassName::memberName`.
     fn elaborate_class(
         &mut self,
         name_str: &str,
@@ -956,6 +1097,10 @@ impl ElabState {
     }
 }
 
+/// Entry point for elaboration: type-checks an entire source file.
+///
+/// Takes a module identifier and the parsed [`SyntaxExpr::Root`] and produces either
+/// a fully elaborated [`Environment`] or a list of accumulated [`ElabError`]s.
 pub fn elaborate_file(
     module_id: ModuleId,
     root: &SyntaxExpr,
