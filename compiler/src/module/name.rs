@@ -7,7 +7,7 @@ pub enum QualifiedName {
 }
 
 impl QualifiedName {
-    #[must_use] 
+    #[must_use]
     pub fn display(&self) -> Option<&str> {
         match self {
             QualifiedName::User(u) => u.display_name.as_deref(),
@@ -51,7 +51,7 @@ pub enum IntrinsicName {
 }
 
 impl IntrinsicName {
-    #[must_use] 
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             IntrinsicName::Nat => "Nat",

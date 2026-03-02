@@ -43,7 +43,7 @@ pub struct PatternRow {
 }
 
 impl PatternRow {
-    #[must_use] 
+    #[must_use]
     pub fn new(patterns: Vec<Pattern>, rhs: Term) -> Self {
         Self { patterns, rhs }
     }
@@ -60,7 +60,7 @@ pub struct MatchProblem {
 }
 
 impl MatchProblem {
-    #[must_use] 
+    #[must_use]
     pub fn new(
         scrutinees: Vec<Scrutinee>,
         rows: Vec<PatternRow>,
@@ -356,7 +356,7 @@ fn pick_column(_problem: &MatchProblem) -> usize {
 fn is_all_variables(problem: &MatchProblem, col: usize) -> bool {
     for row in &problem.rows {
         match &row.patterns[col] {
-            Pattern::Var(_) => {},
+            Pattern::Var(_) => {}
             _ => return false,
         }
     }

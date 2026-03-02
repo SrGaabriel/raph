@@ -45,15 +45,15 @@ impl Display for Term {
     }
 }
 
-#[must_use] 
+#[must_use]
 pub fn pretty_term(term: &Term) -> String {
     match term {
         Term::MVar(_) => "✸".into(),
         Term::BVar(de_bruijn_index) => format!("b{de_bruijn_index}"),
-        Term::FVar(unique) => unique.display_name.clone().map_or_else(
-            || format!("f{}", unique.id),
-            |name| format!("'{name}'"),
-        ),
+        Term::FVar(unique) => unique
+            .display_name
+            .clone()
+            .map_or_else(|| format!("f{}", unique.id), |name| format!("'{name}'")),
         Term::Const(qname) => qname.display().unwrap().to_string(),
         Term::App(func, arg) => format!("{} ({})", pretty_term(func), pretty_term(arg)),
         Term::Pi(binder_info, param, body) => {
@@ -108,6 +108,7 @@ impl Display for DisplayableLevel {
             DisplayableLevel::Max(l1, l2) => write!(f, "max({l1}, {l2})"),
             DisplayableLevel::IMax(l1, l2) => write!(f, "imax({l1}, {l2})"),
             DisplayableLevel::MVar(name) => write!(f, "m{name}"),
+            DisplayableLevel::Param(name) => write!(f, "{name}"),
         }
     }
 }
@@ -117,6 +118,7 @@ enum DisplayableLevel {
     Max(Box<DisplayableLevel>, Box<DisplayableLevel>),
     IMax(Box<DisplayableLevel>, Box<DisplayableLevel>),
     MVar(usize),
+    Param(String),
 }
 
 impl From<&Level> for DisplayableLevel {
@@ -136,6 +138,9 @@ impl From<&Level> for DisplayableLevel {
                 Box::new(DisplayableLevel::from(l2.as_ref())),
             ),
             Level::MVar(unique) => DisplayableLevel::MVar(unique.id),
+            Level::Param(qname) => {
+                DisplayableLevel::Param(qname.display().unwrap_or("<unknown>").to_string())
+            }
         }
     }
 }

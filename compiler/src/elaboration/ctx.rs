@@ -2,7 +2,7 @@ use alloc::{collections::btree_map::BTreeMap, string::String, vec::Vec};
 
 use crate::{
     module::unique::{Unique, UniqueGen},
-    spine::Term,
+    spine::{Level, Term},
 };
 
 #[derive(Debug, Clone)]
@@ -24,7 +24,7 @@ pub struct LocalContext {
 }
 
 impl LocalContext {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self { decls: Vec::new() }
     }
@@ -58,13 +58,13 @@ impl LocalContext {
     }
 
     /// Looks up a local declaration by its unique variable. Returns None if no such declaration exists in the context.
-    #[must_use] 
+    #[must_use]
     pub fn lookup(&self, fvar: &Unique) -> Option<&LocalDecl> {
         self.decls.iter().find(|d| &d.fvar == fvar)
     }
 
     /// Looks up a local declaration by its display name. Returns None if no such declaration exists in the context. If multiple declarations have the same display name, the most recently added one is returned.
-    #[must_use] 
+    #[must_use]
     pub fn lookup_name(&self, name: &str) -> Option<&LocalDecl> {
         self.decls
             .iter()
@@ -90,14 +90,17 @@ pub struct MetavarContext {
     pub decls: Vec<MetavarDecl>,
     /// The mapping from metavariables to their assigned values (if any)
     pub assignments: BTreeMap<Unique, Term>,
+    /// The mapping from universe level metavariables to their assigned levels
+    pub level_assignments: BTreeMap<Unique, Level>,
 }
 
 impl MetavarContext {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self {
             decls: Vec::new(),
             assignments: BTreeMap::new(),
+            level_assignments: BTreeMap::new(),
         }
     }
 
@@ -122,21 +125,42 @@ impl MetavarContext {
     }
 
     /// Checks if a metavariable is assigned. Returns true if the metavariable has an assigned value, false otherwise.
-    #[must_use] 
+    #[must_use]
     pub fn is_assigned(&self, mvar: &Unique) -> bool {
         self.assignments.contains_key(mvar)
     }
 
     /// Gets the assigned value of a metavariable. Returns None if the metavariable is not assigned.
-    #[must_use] 
+    #[must_use]
     pub fn get_assignment(&self, mvar: &Unique) -> Option<&Term> {
         self.assignments.get(mvar)
     }
 
     /// Looks up a metavariable declaration by its unique identifier. Returns None if no such declaration exists in the context.
-    #[must_use] 
+    #[must_use]
     pub fn lookup_decl(&self, mvar: &Unique) -> Option<&MetavarDecl> {
         self.decls.iter().find(|d| &d.mvar == mvar)
+    }
+
+    /// Assigns a level to a universe level metavariable. Panics if already assigned.
+    pub fn assign_level(&mut self, mvar: Unique, value: Level) {
+        assert!(
+            !self.level_assignments.contains_key(&mvar),
+            "level mvar already assigned"
+        );
+        self.level_assignments.insert(mvar, value);
+    }
+
+    /// Checks if a universe level metavariable has been assigned.
+    #[must_use]
+    pub fn is_level_assigned(&self, mvar: &Unique) -> bool {
+        self.level_assignments.contains_key(mvar)
+    }
+
+    /// Gets the assigned level of a universe level metavariable.
+    #[must_use]
+    pub fn get_level_assignment(&self, mvar: &Unique) -> Option<&Level> {
+        self.level_assignments.get(mvar)
     }
 }
 

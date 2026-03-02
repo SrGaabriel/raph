@@ -50,6 +50,7 @@ pub fn is_def_eq(state: &mut ElabState, a: &Term, b: &Term) -> bool {
         (Term::Let(ty1, v1, b1), Term::Let(ty2, v2, b2)) => {
             is_def_eq(state, ty1, ty2) && is_def_eq(state, v1, v2) && is_def_eq(state, b1, b2)
         }
+        (Term::Sort(l1), Term::Sort(l2)) => unify_level(state, l1, l2),
         _ => structural_eq(&a, &b),
     }
 }
@@ -87,6 +88,7 @@ fn structural_eq_level(a: &Level, b: &Level) -> bool {
             structural_eq_level(a1, b1) && structural_eq_level(a2, b2)
         }
         (Level::MVar(u1), Level::MVar(u2)) => u1 == u2,
+        (Level::Param(u1), Level::Param(u2)) => u1 == u2,
         _ => false,
     }
 }
@@ -106,7 +108,7 @@ fn instantiate_mvars(state: &ElabState, term: &Term) -> Term {
             }
         }
         Term::Unit | Term::Const(_) | Term::BVar(_) | Term::FVar(_) | Term::Lit(_) => term.clone(),
-        Term::Sort(l) => Term::Sort(instantiate_mvars_level(l)),
+        Term::Sort(l) => Term::Sort(instantiate_mvars_level(state, l)),
         Term::App(f, a) => Term::mk_app(instantiate_mvars(state, f), instantiate_mvars(state, a)),
         Term::Lam(info, ty, body) => Term::mk_lam(
             *info,
@@ -132,23 +134,73 @@ fn instantiate_mvars(state: &ElabState, term: &Term) -> Term {
 }
 
 /// Instantiates assigned metavariables within universe levels.
-fn instantiate_mvars_level(level: &Level) -> Level {
+fn instantiate_mvars_level(state: &ElabState, level: &Level) -> Level {
     match level {
         Level::Zero => Level::Zero,
-        Level::Succ(l) => Level::Succ(instantiate_mvars_level(l).boxed()),
+        Level::Succ(l) => Level::Succ(instantiate_mvars_level(state, l).boxed()),
         Level::Max(l1, l2) => Level::Max(
-            instantiate_mvars_level(l1).boxed(),
-            instantiate_mvars_level(l2).boxed(),
+            instantiate_mvars_level(state, l1).boxed(),
+            instantiate_mvars_level(state, l2).boxed(),
         ),
         Level::IMax(l1, l2) => Level::IMax(
-            instantiate_mvars_level(l1).boxed(),
-            instantiate_mvars_level(l2).boxed(),
+            instantiate_mvars_level(state, l1).boxed(),
+            instantiate_mvars_level(state, l2).boxed(),
         ),
         Level::MVar(u) => {
-            // todo: create their table
-            Level::MVar(u.clone())
+            if let Some(val) = state.mctx.get_level_assignment(u) {
+                instantiate_mvars_level(state, &val.clone())
+            } else {
+                Level::MVar(u.clone())
+            }
         }
+        Level::Param(u) => Level::Param(u.clone()),
     }
+}
+
+/// Attempts to unify two universe levels, potentially solving level metavariables.
+fn unify_level(state: &mut ElabState, a: &Level, b: &Level) -> bool {
+    let a = instantiate_mvars_level(state, a);
+    let b = instantiate_mvars_level(state, b);
+
+    if structural_eq_level(&a, &b) {
+        return true;
+    }
+
+    if try_assign_level_mvar(state, &a, &b) {
+        return true;
+    }
+    if try_assign_level_mvar(state, &b, &a) {
+        return true;
+    }
+
+    match (&a, &b) {
+        (Level::Succ(a), Level::Succ(b)) => unify_level(state, a, b),
+        (Level::Max(a1, a2), Level::Max(b1, b2)) | (Level::IMax(a1, a2), Level::IMax(b1, b2)) => {
+            unify_level(state, a1, b1) && unify_level(state, a2, b2)
+        }
+        _ => false,
+    }
+}
+
+/// Attempts to assign level metavariable `a` to level `b`.
+///
+/// Succeeds only when `a` is an unassigned level `MVar` and `b` does not contain `a`.
+fn try_assign_level_mvar(state: &mut ElabState, a: &Level, b: &Level) -> bool {
+    let mvar_a = match a {
+        Level::MVar(u) => u.clone(),
+        _ => return false,
+    };
+
+    if state.mctx.is_level_assigned(&mvar_a) {
+        return false;
+    }
+
+    if occurs_in_level(&mvar_a, b) {
+        return false;
+    }
+
+    state.mctx.assign_level(mvar_a, b.clone());
+    true
 }
 
 /// Attempts to assign metavariable `a` to the value `b`.
@@ -198,5 +250,6 @@ fn occurs_in_level(mvar: &Unique, level: &Level) -> bool {
             occurs_in_level(mvar, l1) || occurs_in_level(mvar, l2)
         }
         Level::MVar(u) => u == mvar,
+        Level::Param(_) => false,
     }
 }

@@ -18,7 +18,7 @@ pub struct ElabError {
 }
 
 impl ElabError {
-    #[must_use] 
+    #[must_use]
     pub fn new(kind: ElabErrorKind, span: Span) -> Self {
         Self { kind, span }
     }
@@ -32,10 +32,9 @@ impl Display for ElabError {
             ElabErrorKind::UndefinedConstructor(name) => {
                 write!(f, "undefined constructor '{name}'")
             }
-            ElabErrorKind::TypeMismatch { expected, found } => write!(
-                f,
-                "type mismatch: expected '{expected}', found '{found}'"
-            ),
+            ElabErrorKind::TypeMismatch { expected, found } => {
+                write!(f, "type mismatch: expected '{expected}', found '{found}'")
+            }
             ElabErrorKind::UnsupportedSyntax(syntax) => {
                 write!(f, "unsupported syntax: '{syntax:?}'")
             }

@@ -10,7 +10,7 @@ pub struct Unique {
 }
 
 impl Unique {
-    #[must_use] 
+    #[must_use]
     pub const fn new(id: usize, module_id: ModuleId, display_name: Option<String>) -> Self {
         Self {
             id,
@@ -19,7 +19,7 @@ impl Unique {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn unnamed(id: usize, module_id: ModuleId) -> Self {
         Self {
             id,
@@ -59,7 +59,7 @@ pub struct UniqueGen {
 }
 
 impl UniqueGen {
-    #[must_use] 
+    #[must_use]
     pub fn new(module_id: ModuleId) -> Self {
         Self { module_id, next: 0 }
     }

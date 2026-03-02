@@ -632,10 +632,11 @@ impl ElabState {
                 ));
                 (self.erroneous_term(), self.erroneous_term())
             }
-            SyntaxExpr::Constructor { name, .. } if name == "Type" => (
-                Term::type0(),
-                Term::Sort(Level::Succ(Level::type0().boxed())),
-            ),
+            SyntaxExpr::Constructor { name, .. } if name == "Type" => {
+                let u = self.gen_.fresh_unnamed();
+                let level = Level::MVar(u);
+                (Term::Sort(level.clone()), Term::Sort(level.succ()))
+            }
             SyntaxExpr::Constructor { name, .. } if name == "Prop" => {
                 (Term::Sort(Level::Zero), Term::type0())
             }

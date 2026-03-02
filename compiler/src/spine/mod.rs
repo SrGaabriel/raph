@@ -19,37 +19,37 @@ pub enum Term {
 }
 
 impl Term {
-    #[must_use] 
+    #[must_use]
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn mk_app(l: Term, r: Term) -> Self {
         Self::App(l.boxed(), r.boxed())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn mk_pi(info: BinderInfo, param: Term, body: Term) -> Self {
         Self::Pi(info, param.boxed(), body.boxed())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn mk_lam(info: BinderInfo, param: Term, body: Term) -> Self {
         Self::Lam(info, param.boxed(), body.boxed())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn mk_sigma(info: BinderInfo, param: Term, body: Term) -> Self {
         Self::Sigma(info, param.boxed(), body.boxed())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn mk_let(ty: Term, val: Term, body: Term) -> Self {
         Self::Let(ty.boxed(), val.boxed(), body.boxed())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn type0() -> Self {
         Term::Sort(Level::type0())
     }
@@ -76,20 +76,21 @@ pub enum Level {
     Max(Box<Level>, Box<Level>),
     IMax(Box<Level>, Box<Level>),
     MVar(Unique),
+    Param(QualifiedName),
 }
 
 impl Level {
-    #[must_use] 
+    #[must_use]
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn type0() -> Self {
         Level::Succ(Box::new(Level::Zero))
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn type_n(n: u64) -> Self {
         let mut level = Level::Zero;
         for _ in 0..n {
@@ -97,9 +98,14 @@ impl Level {
         }
         level
     }
+
+    #[must_use]
+    pub fn succ(self) -> Self {
+        Level::Succ(Box::new(self))
+    }
 }
 
-#[must_use] 
+#[must_use]
 pub fn uncurry(term: Term) -> (Term, Vec<(BinderInfo, Term)>) {
     let mut args = Vec::new();
     let mut current = term;

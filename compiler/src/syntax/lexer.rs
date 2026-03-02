@@ -26,7 +26,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    #[must_use] 
+    #[must_use]
     pub fn new(source_file: &'a SourceFile<'a>) -> Self {
         Self {
             source_file,
@@ -47,7 +47,7 @@ impl<'a> Lexer<'a> {
         index
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn eoi_span(&self) -> Span {
         Span::empty(self.cursor.file, self.cursor.byte_offset)
     }
