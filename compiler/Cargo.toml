@@ -11,5 +11,5 @@ runtime.workspace = true
 
 thiserror.workspace = true
 anyhow.workspace = true
-chumsky.workspace = true
+cstree.workspace = true
 miette.workspace = true

@@ -54,6 +54,9 @@ pub enum TokenKind {
     Greater,
     LessEqual,
     GreaterEqual,
+    Whitespace,
+    Theorem,
+    Match,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

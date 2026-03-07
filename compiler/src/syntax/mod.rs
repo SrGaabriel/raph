@@ -1,6 +1,7 @@
 pub mod error;
 pub mod lexer;
 pub mod parser;
+pub mod kind;
 pub mod token;
 pub mod tree;
 
@@ -86,7 +87,7 @@ pub trait Spanned {
     fn span(&self) -> Span;
 }
 
-fn spanning<A: Spanned, B: Spanned>(a: &A, b: &B) -> Span {
+pub fn spanning<A: Spanned, B: Spanned>(a: &A, b: &B) -> Span {
     let span_a = a.span();
     let span_b = b.span();
     assert!(

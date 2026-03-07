@@ -56,6 +56,7 @@ pub extern "C" fn _start() -> ! {
         let mut lex_errors = alloc::vec::Vec::new();
         for result in &mut lexer {
             match result {
+                Ok(token) if token.kind == crate::syntax::token::TokenKind::Whitespace => {}
                 Ok(token) => tokens.push((token, token.span)),
                 Err(err) => lex_errors.push(err),
             }

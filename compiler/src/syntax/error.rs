@@ -160,6 +160,9 @@ impl fmt::Display for TokenKind {
             TokenKind::Greater => write!(f, "`>`"),
             TokenKind::LessEqual => write!(f, "`<=`"),
             TokenKind::GreaterEqual => write!(f, "`>=`"),
+            TokenKind::Whitespace => write!(f, "whitespace"),
+            TokenKind::Theorem => write!(f, "`theorem`"),
+            TokenKind::Match => write!(f, "`match`"),
         }
     }
 }

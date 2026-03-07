@@ -59,20 +59,28 @@ impl<'a> Iterator for Lexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let source = &self.source_file.source;
 
-        while self.cursor.byte_offset < source.len() {
-            match source[self.cursor.byte_offset] {
-                b' ' | b'\t' | b'\r' | b'\n' => self.cursor.advance(1),
-                _ => break,
-            }
-        }
-
         if self.cursor.byte_offset >= source.len() {
             return None;
         }
 
+        let start = self.cursor.byte_offset;
+
+        if matches!(source[start], b' ' | b'\t' | b'\r' | b'\n') {
+            while self.cursor.byte_offset < source.len() {
+                match source[self.cursor.byte_offset] {
+                    b' ' | b'\t' | b'\r' | b'\n' => self.cursor.advance(1),
+                    _ => break,
+                }
+            }
+            return Some(Ok(Token {
+                kind: TokenKind::Whitespace,
+                lexeme: &source[start..self.cursor.byte_offset],
+                span: self.cursor.span_from(start),
+            }));
+        }
+
         let remaining = &source[self.cursor.byte_offset..];
         let current = decode_utf8_char(remaining)?;
-        let start = self.cursor.byte_offset;
 
         match current {
             '0'..='9' => {
@@ -119,6 +127,8 @@ impl<'a> Iterator for Lexer<'a> {
                     b"inductive" => TokenKind::Inductive,
                     b"class" => TokenKind::Class,
                     b"instance" => TokenKind::Instance,
+                    b"theorem" => TokenKind::Theorem,
+                    b"match" => TokenKind::Match,
                     _ if is_upper => TokenKind::UpperIdentifier,
                     _ => TokenKind::LowerIdentifier,
                 };
